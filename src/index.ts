@@ -2,4 +2,5 @@
 export * from './zodql/index.js';
 export * from './generators/GraphQLSchemaGenerator.js';
 export * from './validation/index.js';
+export * from './plugins/index.js';
 

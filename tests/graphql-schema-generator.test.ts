@@ -1626,15 +1626,8 @@ const schema = generator.generateSchemaFile();
       });
     });
 
-    it("should handle relationships configuration", () => {
+    it("should handle relationships as fields", () => {
       const zodqlCode = `
-const Post = defineObject("Post", {
-  fields: {
-    id: Scalars.ID,
-    title: Scalars.String,
-  },
-});
-
 const Comment = defineObject("Comment", {
   fields: {
     id: Scalars.ID,
@@ -1642,24 +1635,22 @@ const Comment = defineObject("Comment", {
   },
 });
 
+const Post = defineObject("Post", {
+  fields: {
+    id: Scalars.ID,
+    title: Scalars.String,
+    comments: z.array(Comment), // Relationship field - type-safe!
+  },
+});
+
 const generator = new GraphQLSchemaGenerator("Post", {
   schema: Post,
-  relationships: {
-    hasMany: [{ type: "Comment", field: "comments" }],
-  },
 });
 
 const schema = generator.generateSchemaFile();
 `.trim();
 
       withTestCapture(zodqlCode, () => {
-        const Post = defineObject("Post", {
-          fields: {
-            id: Scalars.ID,
-            title: Scalars.String,
-          },
-        });
-
         const Comment = defineObject("Comment", {
           fields: {
             id: Scalars.ID,
@@ -1667,17 +1658,23 @@ const schema = generator.generateSchemaFile();
           },
         });
 
+        const Post = defineObject("Post", {
+          fields: {
+            id: Scalars.ID,
+            title: Scalars.String,
+            comments: z.array(Comment), // Relationship field - type-safe!
+          },
+        });
+
         const generator = new GraphQLSchemaGenerator("Post", {
           schema: Post,
-          relationships: {
-            hasMany: [{ type: "Comment", field: "comments" }],
-          },
         });
 
         const schema = captureSchema(generator.generateSchemaFile());
 
         expect(schema).toContain("type Post");
         expect(schema).toContain("comments:");
+        expect(schema).toContain("[Comment!]!");
       });
     });
 

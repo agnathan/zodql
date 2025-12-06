@@ -16,6 +16,9 @@
     "README.md",
     "LICENSE"
   ],
+  "bin": {
+    "zodql": "./dist/cli/plugin-cli.js"
+  },
   "scripts": {
     "clean": "rimraf dist",
     "build": "node esbuild.config.js",
@@ -31,7 +34,8 @@
     "test:single": "vitest run -t",
     "test:show": "tsx scripts/test-debug.ts",
     "validate": "tsx scripts/validate-schema.ts",
-    "lint:schema": "tsx scripts/lint-schema.ts"
+    "lint:schema": "tsx scripts/lint-schema.ts",
+    "plugin": "tsx src/cli/plugin-cli.ts"
   },
   "keywords": [
     "graphql",
