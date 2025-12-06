@@ -37,7 +37,6 @@
     "lint:schema": "tsx scripts/lint-schema.ts",
     "plugin": "tsx src/cli/plugin-cli.ts",
     "convert": "tsx src/cli/graphql-to-zodql.ts",
-    "generate:operations": "tsx scripts/generate-operations.ts",
     "generate:operations": "tsx scripts/generate-operations.ts"
   },
   "keywords": [

@@ -7,6 +7,7 @@ import {
   finalizeTest,
   writeTestSummaries,
   setDescribeBlock,
+  setTestFileName,
 } from "../src/test-reporter.js";
 
 // Store current test context
@@ -43,6 +44,10 @@ function withTestCapture(graphQLSchema: string, testFn: () => void) {
 
 describe("ZodQLCodeGenerator - Reverse Tests", () => {
   beforeEach((ctx) => {
+    // Capture test file name from context
+    const filePath = ctx.task?.file?.name || 'zodql-code-generator.test.ts';
+    const fileName = filePath.split(/[/\\]/).pop() || 'zodql-code-generator.test.ts';
+    setTestFileName(fileName);
     // Capture test name from context
     currentTestName = ctx.task?.name;
     // Capture describe block name from suite hierarchy

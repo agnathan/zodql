@@ -11,6 +11,7 @@ import {
   finalizeTest,
   writeTestSummaries,
   setDescribeBlock,
+  setTestFileName,
 } from '../src/test-reporter.js';
 
 // Store current test context
@@ -97,6 +98,10 @@ describe('GraphQLOperationsPlugin', () => {
     for (const key of Registry.keys()) {
       Registry.delete(key);
     }
+    // Capture test file name from context
+    const filePath = ctx.task?.file?.name || 'graphql-operations-plugin.test.ts';
+    const fileName = filePath.split(/[/\\]/).pop() || 'graphql-operations-plugin.test.ts';
+    setTestFileName(fileName);
     // Capture test name from context
     currentTestName = ctx.task?.name;
     // Capture describe block name from suite hierarchy

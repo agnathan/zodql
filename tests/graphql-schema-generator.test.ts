@@ -20,6 +20,7 @@ import {
   finalizeTest,
   writeTestSummaries,
   setDescribeBlock,
+  setTestFileName,
 } from "../../src/test-reporter.js";
 
 // Store current test context
@@ -57,6 +58,10 @@ describe("GraphQLSchemaGenerator - ZODQL Guide Tests", () => {
   beforeEach((ctx) => {
     // Clear registry before each test to avoid conflicts
     Registry.clear();
+    // Capture test file name from context
+    const filePath = ctx.task?.file?.name || 'graphql-schema-generator.test.ts';
+    const fileName = filePath.split(/[/\\]/).pop() || 'graphql-schema-generator.test.ts';
+    setTestFileName(fileName);
     // Capture test name from context
     currentTestName = ctx.task?.name;
     // Capture describe block name from suite hierarchy

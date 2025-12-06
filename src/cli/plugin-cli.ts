@@ -34,26 +34,31 @@ export class PluginCLI {
    * Main CLI entry point
    */
   async run(args: string[]): Promise<void> {
-    const command = args[0] || 'help';
+    // Skip 'plugin' if it's the first argument (when called directly)
+    const normalizedArgs = args[0] === 'plugin' ? args.slice(1) : args;
+    const command = normalizedArgs[0] || 'help';
 
     switch (command) {
       case 'list':
         await this.listPlugins();
         break;
       case 'run':
-        await this.runPlugins(args.slice(1));
+        await this.runPlugins(normalizedArgs.slice(1));
         break;
       case 'init':
         await this.initConfig();
         break;
       case 'add':
-        await this.addPlugin(args[1], args.slice(2));
+        await this.addPlugin(normalizedArgs[1], normalizedArgs.slice(2));
         break;
       case 'remove':
-        await this.removePlugin(args[1]);
+        await this.removePlugin(normalizedArgs[1]);
         break;
       case 'create':
-        await this.createPlugin(args[1]);
+        await this.createPlugin(normalizedArgs[1]);
+        break;
+      case 'search':
+        await this.searchPlugins(normalizedArgs.slice(1));
         break;
       case 'help':
       default:
@@ -66,31 +71,22 @@ export class PluginCLI {
    * List available plugins
    */
   private async listPlugins(): Promise<void> {
-    console.log('\n📦 Available ZodQL Plugins:\n');
+    console.log('\n📦 Configured ZodQL Plugins:\n');
     
-    const builtInPlugins = [
-      { name: 'zodql-plugin-operations', description: 'Generate GraphQL operations' },
-      { name: 'zodql-plugin-react-query', description: 'Generate React Query hooks' },
-      { name: 'zodql-plugin-openapi', description: 'Generate OpenAPI specification' },
-    ];
-
-    console.log('Built-in Plugins:');
-    builtInPlugins.forEach(plugin => {
-      console.log(`  • ${plugin.name}`);
-      console.log(`    ${plugin.description}\n`);
-    });
-
     if (this.config.plugins && this.config.plugins.length > 0) {
-      console.log('Configured Plugins:');
-      this.config.plugins.forEach(plugin => {
-        console.log(`  • ${plugin.name}`);
+      this.config.plugins.forEach((plugin, index) => {
+        console.log(`${index + 1}. ${plugin.name}`);
         if (plugin.options) {
-          console.log(`    Options: ${JSON.stringify(plugin.options)}`);
+          console.log(`   Options: ${JSON.stringify(plugin.options)}`);
         }
         console.log();
       });
     } else {
-      console.log('No plugins configured. Run "zodql plugin init" to get started.\n');
+      console.log('No plugins configured.');
+      console.log('\nTo get started:');
+      console.log('  1. Run "zodql plugin init" to create a configuration file');
+      console.log('  2. Run "zodql plugin add <plugin-name>" to add plugins');
+      console.log('  3. Run "zodql plugin run" to execute plugins\n');
     }
   }
 
@@ -299,6 +295,84 @@ const plugin = new ${this.toPascalCase(pluginName)}Plugin({
   }
 
   /**
+   * Search for plugins on GitHub
+   */
+  private async searchPlugins(args: string[]): Promise<void> {
+    const query = args[0] || 'zodql-plugin-*';
+    const searchQuery = query.includes('*') ? query.replace('*', '') : query;
+
+    console.log(`\n🔍 Searching GitHub for plugins matching "${query}"...\n`);
+
+    try {
+      // GitHub API search endpoint
+      const url = `https://api.github.com/search/repositories?q=${encodeURIComponent(searchQuery)}+in:name+language:typescript&sort=stars&order=desc&per_page=20`;
+      
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        if (response.status === 403) {
+          console.error('❌ GitHub API rate limit exceeded. Please try again later.\n');
+          process.exit(1);
+        }
+        throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json() as {
+        total_count: number;
+        items: Array<{
+          name: string;
+          full_name: string;
+          description: string | null;
+          html_url: string;
+          stargazers_count: number;
+          updated_at: string;
+          topics: string[];
+        }>;
+      };
+
+      if (data.total_count === 0) {
+        console.log('No plugins found matching your search.\n');
+        console.log('Try:');
+        console.log('  - zodql plugin search zodql-plugin-operations');
+        console.log('  - zodql plugin search zodql-plugin-react\n');
+        return;
+      }
+
+      console.log(`Found ${data.total_count} repository(ies). Showing top ${Math.min(data.items.length, 20)}:\n`);
+
+      data.items.forEach((repo, index) => {
+        const isPlugin = repo.name.startsWith('zodql-plugin-') || repo.topics.includes('zodql-plugin');
+        
+        if (isPlugin || query === 'zodql-plugin-*') {
+          console.log(`${index + 1}. ${repo.name}`);
+          if (repo.description) {
+            console.log(`   ${repo.description}`);
+          }
+          console.log(`   ⭐ ${repo.stargazers_count} stars | 📅 Updated ${new Date(repo.updated_at).toLocaleDateString()}`);
+          console.log(`   🔗 ${repo.html_url}`);
+          if (repo.topics.length > 0) {
+            console.log(`   🏷️  ${repo.topics.join(', ')}`);
+          }
+          console.log();
+        }
+      });
+
+      console.log('To add a plugin:');
+      console.log(`  zodql plugin add ${data.items[0]?.name || '<plugin-name>'} [options]\n`);
+
+    } catch (error) {
+      console.error('❌ Error searching GitHub:');
+      if (error instanceof Error) {
+        console.error(`   ${error.message}\n`);
+      } else {
+        console.error(`   ${String(error)}\n`);
+      }
+      console.log('Make sure you have an internet connection and GitHub API is accessible.\n');
+      process.exit(1);
+    }
+  }
+
+  /**
    * Show help message
    */
   private showHelp(): void {
@@ -308,16 +382,19 @@ const plugin = new ${this.toPascalCase(pluginName)}Plugin({
 Usage: zodql plugin <command> [options]
 
 Commands:
-  list              List available plugins
+  list              List configured plugins
   run               Run configured plugins
   init              Initialize plugin configuration
   add <name>        Add a plugin to configuration
   remove <name>     Remove a plugin from configuration
   create <name>     Create a new plugin template
+  search [query]    Search for plugins on GitHub (default: zodql-plugin-*)
   help              Show this help message
 
 Examples:
   zodql plugin init
+  zodql plugin search
+  zodql plugin search zodql-plugin-operations
   zodql plugin add zodql-plugin-operations --outputDir ./generated
   zodql plugin run
   zodql plugin create my-plugin

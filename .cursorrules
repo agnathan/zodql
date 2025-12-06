@@ -1,668 +1,128 @@
-import { z } from 'zod';
-import { Scalars, defineEnum, defineInput, defineInterface, defineObject, defineUnion, field, register } from 'zodql';
-import { GraphQLSchemaGenerator } from 'zodql';
-
-const AWSDateTime = register('AWSDateTime', z.string());
-
-const AWSJSON = register('AWSJSON', z.string());
-
-const EntityType = defineEnum('EntityType', ["PROJECT", "DOCLINK", "WORKFLOW", "DASHBOARD", "DATASOURCE", "PRODUCT_LISTING", "PRODUCT_VERSION", "SUBSCRIPTION"]);
-
-const PermissionScope = defineEnum('PermissionScope', ["PRIVATE", "TENANT", "SYSTEM"]);
-
-const ListScope = defineEnum('ListScope', ["OWNED_BY_ME", "SHARED_WITH_ME", "ALL_TENANT"]);
-
-const ProjectStatus = defineEnum('ProjectStatus', ["ACTIVE", "ARCHIVED", "DELETED"]);
-
-const DocLinkStatus = defineEnum('DocLinkStatus', ["notUploaded", "uploaded", "processing", "ready", "failed"]);
-
-const SubscriptionStatus = defineEnum('SubscriptionStatus', ["ACTIVE", "PAST_DUE", "CANCELED", "EXPIRED"]);
-
-const PresenceAction = defineEnum('PresenceAction', ["VIEWING", "TYPING", "EDITING", "IDLE"]);
-
-const SortDirection = defineEnum('SortDirection', ["ASC", "DESC"]);
-
-const ProjectSortField = defineEnum('ProjectSortField', ["UPDATED_AT", "NAME"]);
-
-const SystemNode = defineInterface('SystemNode', {
-  fields: {
-    id: Scalars.ID,
-    entityType: EntityType,
-    tenantId: Scalars.ID,
-    ownerId: Scalars.ID,
-    createdAt: Scalars.DateTime,
-    updatedAt: Scalars.DateTime,
-    deletedAt: Scalars.DateTime.optional(),
-    ttl: Scalars.Int.optional(),
-    forkedFromId: Scalars.ID.optional(),
-    forkedFromVersion: Scalars.String.optional(),
-    permissions: ResourcePermissions,
-  },
-});
-
-const Paginate = defineInterface('Paginate', {
-  fields: {
-    id: Scalars.ID,
-    updatedAt: Scalars.DateTime,
-  },
-});
-
-const Shareable = defineInterface('Shareable', {
-  fields: {
-    sharedWith: z.array(Scalars.String.optional()).optional(),
-  },
-});
-
-const LicensedItem = defineInterface('LicensedItem', {
-  fields: {
-    subscriptionId: Scalars.ID.optional(),
-    isLocked: Scalars.Boolean,
-  },
-});
-
-const PrimaryKeyInput = defineInput('PrimaryKeyInput', {
-  id: Scalars.ID,
-});
-
-const ParentKeyInput = defineInput('ParentKeyInput', {
-  parentId: Scalars.ID,
-});
-
-const CompositeKeyInput = defineInput('CompositeKeyInput', {
-  id: Scalars.ID,
-  parentId: Scalars.ID,
-});
-
-const PaginateInput = defineInput('PaginateInput', {
-  first: Scalars.Int.optional(),
-  after: Scalars.String.optional(),
-  last: Scalars.Int.optional(),
-  before: Scalars.String.optional(),
-});
-
-const ForkEntityInput = defineInput('ForkEntityInput', {
-  sourceKey: PrimaryKeyInput,
-  targetScope: PermissionScope,
-  name: Scalars.String.optional(),
-  description: Scalars.String.optional(),
-});
-
-const ProjectSortInput = defineInput('ProjectSortInput', {
-  field: ProjectSortField.optional(),
-  direction: SortDirection.optional(),
-});
-
-const ProjectFilterInput = defineInput('ProjectFilterInput', {
-  status: ProjectStatus.optional(),
-  nameContains: Scalars.String.optional(),
-});
-
-const CreateProjectInput = defineInput('CreateProjectInput', {
-  name: Scalars.String,
-  description: Scalars.String.optional(),
-  status: ProjectStatus.optional(),
-  sharingMode: PermissionScope.optional(),
-});
-
-const UpdateProjectInput = defineInput('UpdateProjectInput', {
-  name: Scalars.String.optional(),
-  description: Scalars.String.optional(),
-  status: ProjectStatus.optional(),
-  sharedWith: z.array(Scalars.String.optional()).optional(),
-});
-
-const CreateDocLinkInput = defineInput('CreateDocLinkInput', {
-  documentId: Scalars.ID,
-  filename: Scalars.String,
-  status: DocLinkStatus.optional(),
-});
-
-const UpdateDocLinkInput = defineInput('UpdateDocLinkInput', {
-  filename: Scalars.String.optional(),
-  status: DocLinkStatus.optional(),
-});
-
-const WorkflowSortInput = defineInput('WorkflowSortInput', {
-  field: ProjectSortField.optional(),
-  direction: SortDirection.optional(),
-});
-
-const WorkflowFilterInput = defineInput('WorkflowFilterInput', {
-  nameContains: Scalars.String.optional(),
-});
-
-const CreateWorkflowInput = defineInput('CreateWorkflowInput', {
-  name: Scalars.String,
-  definitionYaml: Scalars.String,
-});
-
-const UpdateWorkflowInput = defineInput('UpdateWorkflowInput', {
-  name: Scalars.String.optional(),
-  definitionYaml: Scalars.String.optional(),
-});
-
-const DashboardSortInput = defineInput('DashboardSortInput', {
-  field: ProjectSortField.optional(),
-  direction: SortDirection.optional(),
-});
-
-const CreateDashboardInput = defineInput('CreateDashboardInput', {
-  title: Scalars.String,
-  layoutConfig: Scalars.JSON,
-});
-
-const UpdateDashboardInput = defineInput('UpdateDashboardInput', {
-  title: Scalars.String.optional(),
-  layoutConfig: Scalars.JSON.optional(),
-});
-
-const UserError = defineObject('UserError', {
-  fields: {
-    message: Scalars.String,
-    code: Scalars.String,
-    field: z.array(Scalars.String.optional()).optional(),
-  },
-});
-
-const ResourcePermissions = defineObject('ResourcePermissions', {
-  fields: {
-    canEdit: Scalars.Boolean,
-    canDelete: Scalars.Boolean,
-    canShare: Scalars.Boolean,
-  },
-});
-
-const PageInfo = defineObject('PageInfo', {
-  fields: {
-    hasNextPage: Scalars.Boolean,
-    hasPreviousPage: Scalars.Boolean,
-    startCursor: Scalars.String.optional(),
-    endCursor: Scalars.String.optional(),
-  },
-});
-
-const Project = defineObject('Project', {
-  fields: {
-    id: Scalars.ID,
-    entityType: EntityType,
-    tenantId: Scalars.ID,
-    ownerId: Scalars.ID,
-    createdAt: Scalars.DateTime,
-    updatedAt: Scalars.DateTime,
-    deletedAt: Scalars.DateTime.optional(),
-    ttl: Scalars.Int.optional(),
-    forkedFromId: Scalars.ID.optional(),
-    forkedFromVersion: Scalars.String.optional(),
-    permissions: ResourcePermissions,
-    sharedWith: z.array(Scalars.String.optional()).optional(),
-    name: Scalars.String,
-    description: Scalars.String.optional(),
-    status: ProjectStatus,
-    docLinks: DocLinkConnection.optional(),
-  },
-  implements: [SystemNode, Shareable, Paginate],
-});
-
-const ProjectEdge = defineObject('ProjectEdge', {
-  fields: {
-    cursor: Scalars.String,
-    node: Project,
-  },
-});
-
-const ProjectConnection = defineObject('ProjectConnection', {
-  fields: {
-    edges: z.array(ProjectEdge),
-    pageInfo: PageInfo,
-  },
-});
-
-const ProjectPayload = defineObject('ProjectPayload', {
-  fields: {
-    project: Project.optional(),
-    userErrors: z.array(UserError),
-  },
-});
-
-const DocLink = defineObject('DocLink', {
-  fields: {
-    id: Scalars.ID,
-    entityType: EntityType,
-    tenantId: Scalars.ID,
-    ownerId: Scalars.ID,
-    createdAt: Scalars.DateTime,
-    updatedAt: Scalars.DateTime,
-    deletedAt: Scalars.DateTime.optional(),
-    ttl: Scalars.Int.optional(),
-    forkedFromId: Scalars.ID.optional(),
-    forkedFromVersion: Scalars.String.optional(),
-    permissions: ResourcePermissions,
-    parentId: Scalars.ID,
-    documentId: Scalars.ID,
-    filename: Scalars.String,
-    status: DocLinkStatus,
-  },
-  implements: [SystemNode],
-});
-
-const DocLinkConnection = defineObject('DocLinkConnection', {
-  fields: {
-    items: z.array(DocLink),
-    nextToken: Scalars.String.optional(),
-  },
-});
-
-const DocLinkPayload = defineObject('DocLinkPayload', {
-  fields: {
-    docLink: DocLink.optional(),
-    userErrors: z.array(UserError),
-  },
-});
-
-const DocLinkBatchPayload = defineObject('DocLinkBatchPayload', {
-  fields: {
-    successful: z.array(DocLink),
-    failed: z.array(BatchFailure),
-    userErrors: z.array(UserError),
-  },
-});
-
-const BatchFailure = defineObject('BatchFailure', {
-  fields: {
-    filename: Scalars.String.optional(),
-    error: Scalars.String.optional(),
-  },
-});
-
-const Workflow = defineObject('Workflow', {
-  fields: {
-    id: Scalars.ID,
-    entityType: EntityType,
-    tenantId: Scalars.ID,
-    ownerId: Scalars.ID,
-    createdAt: Scalars.DateTime,
-    updatedAt: Scalars.DateTime,
-    deletedAt: Scalars.DateTime.optional(),
-    ttl: Scalars.Int.optional(),
-    forkedFromId: Scalars.ID.optional(),
-    forkedFromVersion: Scalars.String.optional(),
-    permissions: ResourcePermissions,
-    sharedWith: z.array(Scalars.String.optional()).optional(),
-    subscriptionId: Scalars.ID.optional(),
-    isLocked: Scalars.Boolean,
-    name: Scalars.String,
-    definitionYaml: Scalars.String,
-  },
-  implements: [SystemNode, Shareable, LicensedItem, Paginate],
-});
-
-const WorkflowEdge = defineObject('WorkflowEdge', {
-  fields: {
-    cursor: Scalars.String,
-    node: Workflow,
-  },
-});
-
-const WorkflowConnection = defineObject('WorkflowConnection', {
-  fields: {
-    edges: z.array(WorkflowEdge),
-    pageInfo: PageInfo,
-  },
-});
-
-const WorkflowPayload = defineObject('WorkflowPayload', {
-  fields: {
-    workflow: Workflow.optional(),
-    userErrors: z.array(UserError),
-  },
-});
-
-const Dashboard = defineObject('Dashboard', {
-  fields: {
-    id: Scalars.ID,
-    entityType: EntityType,
-    tenantId: Scalars.ID,
-    ownerId: Scalars.ID,
-    createdAt: Scalars.DateTime,
-    updatedAt: Scalars.DateTime,
-    deletedAt: Scalars.DateTime.optional(),
-    ttl: Scalars.Int.optional(),
-    forkedFromId: Scalars.ID.optional(),
-    forkedFromVersion: Scalars.String.optional(),
-    permissions: ResourcePermissions,
-    sharedWith: z.array(Scalars.String.optional()).optional(),
-    subscriptionId: Scalars.ID.optional(),
-    isLocked: Scalars.Boolean,
-    title: Scalars.String,
-    layoutConfig: Scalars.JSON,
-  },
-  implements: [SystemNode, Shareable, LicensedItem, Paginate],
-});
-
-const DashboardEdge = defineObject('DashboardEdge', {
-  fields: {
-    cursor: Scalars.String,
-    node: Dashboard,
-  },
-});
-
-const DashboardConnection = defineObject('DashboardConnection', {
-  fields: {
-    edges: z.array(DashboardEdge),
-    pageInfo: PageInfo,
-  },
-});
-
-const DashboardPayload = defineObject('DashboardPayload', {
-  fields: {
-    dashboard: Dashboard.optional(),
-    userErrors: z.array(UserError),
-  },
-});
-
-const ProductListing = defineObject('ProductListing', {
-  fields: {
-    id: Scalars.ID,
-    entityType: EntityType,
-    tenantId: Scalars.ID,
-    ownerId: Scalars.ID,
-    createdAt: Scalars.DateTime,
-    updatedAt: Scalars.DateTime,
-    deletedAt: Scalars.DateTime.optional(),
-    ttl: Scalars.Int.optional(),
-    forkedFromId: Scalars.ID.optional(),
-    forkedFromVersion: Scalars.String.optional(),
-    permissions: ResourcePermissions,
-    title: Scalars.String,
-    description: Scalars.String.optional(),
-    priceMonthly: Scalars.Float.optional(),
-    latestVersionId: Scalars.ID,
-  },
-  implements: [SystemNode],
-});
-
-const ProductVersion = defineObject('ProductVersion', {
-  fields: {
-    id: Scalars.ID,
-    entityType: EntityType,
-    tenantId: Scalars.ID,
-    ownerId: Scalars.ID,
-    createdAt: Scalars.DateTime,
-    updatedAt: Scalars.DateTime,
-    deletedAt: Scalars.DateTime.optional(),
-    ttl: Scalars.Int.optional(),
-    forkedFromId: Scalars.ID.optional(),
-    forkedFromVersion: Scalars.String.optional(),
-    permissions: ResourcePermissions,
-    productId: Scalars.ID,
-    versionString: Scalars.String,
-    assets: z.array(PackageAsset),
-  },
-  implements: [SystemNode],
-});
-
-const PackageAsset = defineObject('PackageAsset', {
-  fields: {
-    originalAssetId: Scalars.ID,
-    type: EntityType,
-    name: Scalars.String,
-    snapshotData: Scalars.JSON,
-  },
-});
-
-const LicenseSubscription = defineObject('LicenseSubscription', {
-  fields: {
-    id: Scalars.ID,
-    entityType: EntityType,
-    tenantId: Scalars.ID,
-    ownerId: Scalars.ID,
-    createdAt: Scalars.DateTime,
-    updatedAt: Scalars.DateTime,
-    deletedAt: Scalars.DateTime.optional(),
-    ttl: Scalars.Int.optional(),
-    forkedFromId: Scalars.ID.optional(),
-    forkedFromVersion: Scalars.String.optional(),
-    permissions: ResourcePermissions,
-    listingId: Scalars.ID,
-    installedVersionId: Scalars.ID,
-    status: SubscriptionStatus,
-    validUntil: Scalars.DateTime,
-    stripeSubscriptionId: Scalars.String.optional(),
-    stripeCustomerId: Scalars.String.optional(),
-  },
-  implements: [SystemNode],
-});
-
-const ProductListingConnection = defineObject('ProductListingConnection', {
-  fields: {
-    items: z.array(ProductListing),
-    nextToken: Scalars.String.optional(),
-  },
-});
-
-const ProductListingPayload = defineObject('ProductListingPayload', {
-  fields: {
-    productListing: ProductListing.optional(),
-    userErrors: z.array(UserError),
-  },
-});
-
-const LicensePayload = defineObject('LicensePayload', {
-  fields: {
-    license: LicenseSubscription.optional(),
-    userErrors: z.array(UserError),
-  },
-});
-
-const UserPresence = defineObject('UserPresence', {
-  fields: {
-    projectId: Scalars.ID,
-    userId: Scalars.ID,
-    username: Scalars.String.optional(),
-    action: PresenceAction,
-    cursorX: Scalars.Float.optional(),
-    cursorY: Scalars.Float.optional(),
-    timestamp: Scalars.DateTime,
-  },
-});
-
-const ForkEntityPayload = defineObject('ForkEntityPayload', {
-  fields: {
-    node: SystemNode.optional(),
-    userErrors: z.array(UserError),
-  },
-});
-
-const generator = new GraphQLSchemaGenerator('UserError', {
-
-  schema: UserError,
-
-  inputs: {
-    primarykeyinput: PrimaryKeyInput,
-    parentkeyinput: ParentKeyInput,
-    compositekeyinput: CompositeKeyInput,
-    paginateinput: PaginateInput,
-    forkentityinput: ForkEntityInput,
-    projectsortinput: ProjectSortInput,
-    projectfilterinput: ProjectFilterInput,
-    createprojectinput: CreateProjectInput,
-    updateprojectinput: UpdateProjectInput,
-    createdoclinkinput: CreateDocLinkInput,
-    updatedoclinkinput: UpdateDocLinkInput,
-    workflowsortinput: WorkflowSortInput,
-    workflowfilterinput: WorkflowFilterInput,
-    createworkflowinput: CreateWorkflowInput,
-    updateworkflowinput: UpdateWorkflowInput,
-    dashboardsortinput: DashboardSortInput,
-    createdashboardinput: CreateDashboardInput,
-    updatedashboardinput: UpdateDashboardInput,
-  },
-
-  queries: {
-    getProject: field({
-      key: PrimaryKeyInput
-    }, Project.nullable()),
-    projects: field({
-      scope: ListScope.optional(),
-      filter: ProjectFilterInput.optional(),
-      sort: ProjectSortInput.optional(),
-      paginate: PaginateInput.optional()
-    }, ProjectConnection),
-    getDocLink: field({
-      key: CompositeKeyInput
-    }, DocLink.nullable()),
-    listDocLinks: field({
-      key: ParentKeyInput,
-      limit: Scalars.Int.optional(),
-      nextToken: Scalars.String.optional()
-    }, DocLinkConnection.nullable()),
-    getWorkflow: field({
-      key: PrimaryKeyInput
-    }, Workflow.nullable()),
-    workflows: field({
-      scope: ListScope.optional(),
-      filter: WorkflowFilterInput.optional(),
-      sort: WorkflowSortInput.optional(),
-      paginate: PaginateInput.optional()
-    }, WorkflowConnection),
-    getDashboard: field({
-      key: PrimaryKeyInput
-    }, Dashboard.nullable()),
-    dashboards: field({
-      scope: ListScope.optional(),
-      sort: DashboardSortInput.optional(),
-      paginate: PaginateInput.optional()
-    }, DashboardConnection),
-    getProductListing: field({
-      key: PrimaryKeyInput
-    }, ProductListing.nullable()),
-    listProductListings: field({
-      limit: Scalars.Int.optional(),
-      nextToken: Scalars.String.optional()
-    }, ProductListingConnection.nullable()),
-  },
-
-  mutations: {
-    createProject: field({
-      input: CreateProjectInput
-    }, ProjectPayload.nullable()),
-    updateProject: field({
-      key: PrimaryKeyInput,
-      input: UpdateProjectInput
-    }, ProjectPayload.nullable()),
-    deleteProject: field({
-      key: PrimaryKeyInput
-    }, ProjectPayload.nullable()),
-    restoreProject: field({
-      key: PrimaryKeyInput
-    }, ProjectPayload.nullable()),
-    createDocLink: field({
-      parentKey: ParentKeyInput,
-      input: CreateDocLinkInput
-    }, DocLinkPayload.nullable()),
-    batchCreateDocLinks: field({
-      parentKey: ParentKeyInput,
-      inputs: z.array(CreateDocLinkInput)
-    }, DocLinkBatchPayload.nullable()),
-    updateDocLink: field({
-      key: CompositeKeyInput,
-      input: UpdateDocLinkInput
-    }, DocLinkPayload.nullable()),
-    deleteDocLink: field({
-      key: CompositeKeyInput
-    }, DocLinkPayload.nullable()),
-    createWorkflow: field({
-      input: CreateWorkflowInput
-    }, WorkflowPayload.nullable()),
-    updateWorkflow: field({
-      key: PrimaryKeyInput,
-      input: UpdateWorkflowInput
-    }, WorkflowPayload.nullable()),
-    deleteWorkflow: field({
-      key: PrimaryKeyInput
-    }, WorkflowPayload.nullable()),
-    createDashboard: field({
-      input: CreateDashboardInput
-    }, DashboardPayload.nullable()),
-    updateDashboard: field({
-      key: PrimaryKeyInput,
-      input: UpdateDashboardInput
-    }, DashboardPayload.nullable()),
-    deleteDashboard: field({
-      key: PrimaryKeyInput
-    }, DashboardPayload.nullable()),
-    forkEntity: field({
-      input: ForkEntityInput
-    }, ForkEntityPayload.nullable()),
-    createProductListing: field({
-      title: Scalars.String,
-      priceMonthly: Scalars.Float.optional(),
-      includedItemIds: z.array(Scalars.ID)
-    }, ProductListingPayload.nullable()),
-    grantSubscription: field({
-      targetUserId: Scalars.ID,
-      listingId: Scalars.ID,
-      durationDays: Scalars.Int
-    }, LicensePayload.nullable()),
-    broadcastPresence: field({
-      projectId: Scalars.ID,
-      action: PresenceAction,
-      cursorX: Scalars.Float.optional(),
-      cursorY: Scalars.Float.optional()
-    }, UserPresence.nullable()),
-  },
-
-  subscriptions: {
-    onCreateProject: field({
-      ownerId: Scalars.ID.optional(),
-      tenantId: Scalars.ID.optional()
-    }, ProjectPayload.nullable()),
-    onUpdateProject: field({
-      id: Scalars.ID
-    }, ProjectPayload.nullable()),
-    onDeleteProject: field({
-      id: Scalars.ID
-    }, ProjectPayload.nullable()),
-    onCreateDocLink: field({
-      parentId: Scalars.ID
-    }, DocLinkPayload.nullable()),
-    onUpdateDocLink: field({
-      parentId: Scalars.ID
-    }, DocLinkPayload.nullable()),
-    onDeleteDocLink: field({
-      parentId: Scalars.ID
-    }, DocLinkPayload.nullable()),
-    onCreateWorkflow: field({
-      ownerId: Scalars.ID.optional(),
-      tenantId: Scalars.ID.optional()
-    }, WorkflowPayload.nullable()),
-    onUpdateWorkflow: field({
-      id: Scalars.ID
-    }, WorkflowPayload.nullable()),
-    onDeleteWorkflow: field({
-      id: Scalars.ID
-    }, WorkflowPayload.nullable()),
-    onCreateDashboard: field({
-      ownerId: Scalars.ID.optional(),
-      tenantId: Scalars.ID.optional()
-    }, DashboardPayload.nullable()),
-    onUpdateDashboard: field({
-      id: Scalars.ID
-    }, DashboardPayload.nullable()),
-    onDeleteDashboard: field({
-      id: Scalars.ID
-    }, DashboardPayload.nullable()),
-    onCreateProductListing: field({
-      ownerId: Scalars.ID
-    }, ProductListingPayload.nullable()),
-    onGrantSubscription: field({
-      targetUserId: Scalars.ID
-    }, LicensePayload.nullable()),
-    onPresenceChange: field({
-      projectId: Scalars.ID
-    }, UserPresence.nullable()),
-  },
-
-});
-
-const schema = generator.generateSchemaFile();
+# Cursor Rules for ZodQL
+
+## Documentation References
+
+When coding, always use these documents as references:
+- `docs/GRAPHQL_GRAMMAR.md` - Formal GraphQL grammar in EBNF format
+- `docs/ZODQL_GUIDE.md` - Comprehensive guide for building GraphQL schemas with ZodQL
+
+## GraphQL Grammar Mapping
+
+Follow the GraphQL grammar mapping patterns defined in `docs/GRAPHQL_GRAMMAR.md`:
+- Map GraphQL grammar nodes to Zod schemas
+- Use ZodQL definition functions (`defineObject`, `defineInput`, `defineEnum`, etc.)
+- Follow the Registry pattern for type naming
+
+## ZodQL Implementation Patterns
+
+Follow the patterns and best practices outlined in `docs/ZODQL_GUIDE.md`:
+- Use `defineObject` for GraphQL object types
+- Use `defineInput` for GraphQL input types
+- Use `defineEnum` for GraphQL enum types
+- Use `defineInterface` for GraphQL interface types
+- Use `defineUnion` for GraphQL union types
+- Use `field()` helper for fields with arguments
+- Use `register()` for custom scalars and shared types
+
+## Code Style
+
+- Use TypeScript with strict type checking
+- Follow consistent naming conventions (PascalCase for types, camelCase for fields)
+- Write clear, self-documenting code
+- Add JSDoc comments for complex functions
+
+## Generator Compatibility
+
+When modifying `GraphQLSchemaGenerator`:
+- Ensure generated schemas are valid GraphQL SDL
+- Maintain compatibility with AWS AppSync scalar types and directives
+- Preserve Registry-based type resolution
+- Handle all Zod wrapper types (optional, nullable, default, array, union)
+
+## BTFL Workflow (Build, Test, Fix, Loop)
+
+When the user requests "btfl" or mentions following a build-test-fix-loop workflow:
+
+1. **Build Phase**: Run `npm run build` to compile the TypeScript source code
+2. **Test Phase**: Run `npm run test:run` to execute the test suite
+3. **Analysis Phase**: Analyze any build errors or test failures
+4. **Fix Phase**: For each error or failure:
+   - **Explain the problem**: Clearly describe what went wrong, including relevant error messages, stack traces, and context
+   - **Describe the expected outcome**: Explain what the correct behavior should be and what success looks like
+   - **Ask for guidance**: Present potential solutions with numbered questions. For each question:
+     - Provide a **recommended solution** based on best practices and gold standards
+     - Number each question uniquely (e.g., "Question 1:", "Question 2:", etc.)
+     - If the user responds with just a number (e.g., "1" or "2"), interpret that as approval to follow the recommended solution for that question
+     - If multiple questions are presented, ensure each has a unique number across all questions in the analysis
+5. **Loop**: After implementing fixes, repeat the build-test cycle until all tests pass and the build succeeds
+
+**Important**: Never fix errors automatically without user input. Always present the problem, explain the desired outcome, provide recommended solutions, and ask for direction before making changes. This ensures the fixes align with the user's intentions and architectural decisions.
+
+## Test Summary Generation
+
+When the test suite is run (`npm run test:run` or `npm test`), the following happens automatically:
+
+1. **Test Reporter**: A custom test reporter captures:
+   - Test file name (e.g., `graphql-schema-generator.test.ts`)
+   - Test name (the "it" description)
+   - Describe block name (the "describe" block name)
+   - ZodQL input code (the actual TypeScript/ZodQL code used in the test)
+   - Generated GraphQL schema output
+   - Test status (PASSED/FAILED)
+   - Error messages (if failed)
+
+2. **Output Directory Structure**: Test summaries are written to:
+   - Base directory: `test-results/test-results-{DateTime}/`
+   - Format: `{DateTime}` is ISO format with colons/dots replaced by hyphens (e.g., `2024-01-15T10-30-45`)
+   - **Directory Hierarchy**:
+     ```
+     test-results/test-results-{DateTime}/
+       {test-file-name}/              # Directory for each test file
+         {describe-block-name}/        # Directory for each describe block
+           {test-name}_{PASSED|FAILED}.txt  # Individual test result files
+     ```
+   - Example structure:
+     ```
+     test-results/test-results-2024-01-15T10-30-45/
+       graphql-schema-generator.test.ts/
+         GraphQLSchemaGenerator - ZODQL Guide Tests/
+           should_generate_basic_object_type_PASSED.txt
+           should_generate_enum_type_PASSED.txt
+         Basic Type Generation/
+           should_handle_scalar_types_PASSED.txt
+       validation.test.ts/
+         GraphQL Schema Validator/
+           should_validate_a_correct_schema_PASSED.txt
+         GraphQL Schema Linter/
+           should_lint_a_schema_PASSED.txt
+     ```
+
+3. **File Naming**: Each test gets its own file:
+   - Format: `{TestName}_{PASSED|FAILED}.txt`
+   - Test names are sanitized (special chars replaced with underscores)
+
+4. **File Contents**: Each summary file contains:
+   - Test file name
+   - Describe block name
+   - Test name and status
+   - Complete ZodQL input code (formatted)
+   - Generated GraphQL schema output
+   - Error details (if failed)
+
+This hierarchical organization allows easy review of:
+- What each test file contains
+- How tests are organized within describe blocks
+- What each test is doing, what it generates, and why it might be failing
+
+## Schema Validation and Linting
+
+1. **Validator and Linter Feedback**: If there is feedback (errors or warnings) from either the GraphQL schema validator (`src/validation/schema-validator.ts`) or the linter (`src/validation/schema-linter.ts`) on a generated schema:
+   - **Create a new validation test**: Add a new `it` block to `tests/validation.test.ts`.
+   - **Test Scenario**: This new test should specifically address the situation that caused the feedback.
+   - **Assertion**: The test must assert that the generated GraphQL schema is both valid (no validation errors) and linted correctly (no linting errors) for that specific scenario.
+   - **Goal**: Ensure that the generator produces valid and lint-compliant GraphQL SDL for all tested cases.
+
+2. **AWS AppSync Support**: The generator automatically adds AWS scalar and directive definitions to the top of the schema when they are used:
+   - AWS Scalars: `AWSDateTime`, `AWSTime`, `AWSDate`, `AWSEmail`, `AWSJSON`, `AWSJSONObject`, `AWSURL`, `AWSPhone`, `AWSIPAddress`
+   - AWS Directives: `@aws_auth(...)`, `@aws_iam`, `@aws_api_key`, `@aws_cognito_user_pools(cognito_groups: [String!])`
+   - These definitions are automatically prepended to the schema when detected during generation.

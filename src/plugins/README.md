@@ -5,6 +5,7 @@ This directory contains the plugin system infrastructure for ZodQL, allowing the
 ## Overview
 
 The plugin system enables developers to create custom generators that can:
+
 - Generate code (TypeScript, JavaScript, Python, etc.)
 - Generate documentation
 - Generate configuration files
@@ -16,21 +17,21 @@ The plugin system enables developers to create custom generators that can:
 ### Using a Plugin
 
 ```typescript
-import { PluginManager } from 'zodql/plugins';
-import { GraphQLOperationsPlugin } from 'zodql-plugin-operations';
+import { PluginManager } from "zodql/plugins";
+import { GraphQLOperationsPlugin } from "zodql-plugin-operations";
 
 const manager = new PluginManager({
-  workingDir: './generated',
+  workingDir: "./generated",
 });
 
 manager.register(
   new GraphQLOperationsPlugin({
-    outputDir: './generated/operations',
-    format: 'typescript',
+    outputDir: "./generated/operations",
+    format: "typescript",
   })
 );
 
-const generator = new GraphQLSchemaGenerator('User', config);
+const generator = new GraphQLSchemaGenerator("User", config);
 await manager.runPlugins(generator);
 ```
 
@@ -39,13 +40,13 @@ await manager.runPlugins(generator);
 1. **Implement the `ZodQLPlugin` interface:**
 
 ```typescript
-import type { ZodQLPlugin, PluginContext, PluginOutput } from 'zodql/plugins';
+import type { ZodQLPlugin, PluginContext, PluginOutput } from "zodql/plugins";
 
 export class MyPlugin implements ZodQLPlugin {
   metadata = {
-    name: 'my-plugin',
-    version: '1.0.0',
-    description: 'My awesome plugin',
+    name: "my-plugin",
+    version: "1.0.0",
+    description: "My awesome plugin",
   };
 
   generate(context: PluginContext): PluginOutput {
@@ -53,11 +54,11 @@ export class MyPlugin implements ZodQLPlugin {
     return {
       files: [
         {
-          path: './generated/output.txt',
-          content: 'Generated content',
+          path: "./generated/output.txt",
+          content: "Generated content",
         },
       ],
-      logs: ['Plugin executed successfully'],
+      logs: ["Plugin executed successfully"],
     };
   }
 }
@@ -68,24 +69,24 @@ export class MyPlugin implements ZodQLPlugin {
 ```typescript
 generate(context: PluginContext): PluginOutput {
   const { generator, config, entityName, graphQLSchema } = context;
-  
+
   // Access queries
   if (config.queries) {
     for (const [name, queryFn] of Object.entries(config.queries)) {
       // Process query
     }
   }
-  
+
   // Access mutations
   if (config.mutations) {
     // Process mutations
   }
-  
+
   // Access the generated GraphQL SDL
   if (graphQLSchema) {
     // Use the schema string
   }
-  
+
   return { files: [] };
 }
 ```
@@ -160,9 +161,9 @@ Plugins can declare dependencies:
 
 ```typescript
 metadata = {
-  name: 'my-plugin',
-  version: '1.0.0',
-  dependencies: ['other-plugin'], // Runs after other-plugin
+  name: "my-plugin",
+  version: "1.0.0",
+  dependencies: ["other-plugin"], // Runs after other-plugin
 };
 ```
 
