@@ -9,4 +9,8 @@ export * from './unions.js';
 export * from './fields.js';
 export * from './schema.js';
 export * from './resource.js';
+export * from './relationships.js';
+
+// Re-export relationship types constant for convenience
+export { RelationshipTypes } from './relationships.js';
 
