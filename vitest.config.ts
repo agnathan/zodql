@@ -24,6 +24,10 @@ export default defineConfig({
         find: /^(.+)\/zodql\/index\.js$/,
         replacement: resolve(__dirname, 'src/zodql/index.ts'),
       },
+      {
+        find: /^(.+)\/test-reporter\.js$/,
+        replacement: resolve(__dirname, 'src/test-reporter.ts'),
+      },
     ],
   },
   esbuild: {

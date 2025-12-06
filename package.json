@@ -17,6 +17,7 @@
     "LICENSE"
   ],
   "scripts": {
+    "clean": "rimraf dist",
     "build": "node esbuild.config.js",
     "build:dev": "node esbuild.config.js dev",
     "build:watch": "node esbuild.config.js watch",
@@ -25,7 +26,12 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:watch": "vitest watch",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "test:debug": "vitest run --reporter=verbose --no-coverage",
+    "test:single": "vitest run -t",
+    "test:show": "tsx scripts/test-debug.ts",
+    "validate": "tsx scripts/validate-schema.ts",
+    "lint:schema": "tsx scripts/lint-schema.ts"
   },
   "keywords": [
     "graphql",
@@ -39,10 +45,15 @@
     "@types/node": "^24.10.1",
     "@vitest/ui": "^1.0.0",
     "esbuild": "^0.27.1",
+    "rimraf": "^6.1.2",
+    "tsx": "^4.21.0",
     "typescript": "^5.0.0",
     "vitest": "^1.0.0"
   },
   "dependencies": {
+    "@graphql-tools/schema": "^10.0.30",
+    "@graphql-tools/utils": "^10.11.0",
+    "graphql": "^16.12.0",
     "zod": "^3.22.0"
   }
 }

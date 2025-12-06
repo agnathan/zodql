@@ -5,7 +5,7 @@
 1. **Always reference the documentation files when coding:**
    - `docs/GRAPHQL_GRAMMAR.md` - Contains the formal GraphQL grammar in EBNF notation and TypeScript ZodQL implementation patterns
    - `docs/ZODQL_GUIDE.md` - Complete guide for building GraphQL schemas with ZodQL, including examples and best practices
-   
+
    When implementing features, generating code, or answering questions about GraphQL/ZodQL, consult these documents first to ensure consistency with the established patterns and grammar mappings.
 
 ## GraphQL Grammar Mapping
@@ -41,3 +41,65 @@
 - Handle `z.function()` structures created by `field()` helper correctly
 - Support all GraphQL type definitions as documented in the grammar
 
+## BTFL Workflow (Build, Test, Fix, Loop)
+
+When the user requests "btfl" or mentions following a build-test-fix-loop workflow:
+
+1. **Build Phase**: Run `npm run build` to compile the TypeScript source code
+2. **Test Phase**: Run `npm run test:run` to execute the test suite
+3. **Analysis Phase**: Analyze any build errors or test failures
+4. **Fix Phase**: For each error or failure:
+   - **Explain the problem**: Clearly describe what went wrong, including relevant error messages, stack traces, and context
+   - **Describe the expected outcome**: Explain what the correct behavior should be and what success looks like
+   - **Ask for guidance**: Present potential solutions with numbered questions. For each question:
+     - Provide a **recommended solution** based on best practices and gold standards
+     - Number each question uniquely (e.g., "Question 1:", "Question 2:", etc.)
+     - If the user responds with just a number (e.g., "1" or "2"), interpret that as approval to follow the recommended solution for that question
+     - If multiple questions are presented, ensure each has a unique number across all questions in the analysis
+5. **Loop**: After implementing fixes, repeat the build-test cycle until all tests pass and the build succeeds
+
+**Important**: Never fix errors automatically without user input. Always present the problem, explain the desired outcome, provide recommended solutions, and ask for direction before making changes. This ensures the fixes align with the user's intentions and architectural decisions.
+
+## Test Summary Generation
+
+When the test suite is run (`npm run test:run` or `npm test`), the following happens automatically:
+
+1. **Test Reporter**: A custom test reporter captures:
+   - Test name
+   - ZodQL input code (the actual TypeScript/ZodQL code used in the test)
+   - Generated GraphQL schema output
+   - Test status (PASSED/FAILED)
+   - Error messages (if failed)
+
+2. **Output Directory**: Test summaries are written to:
+   - Directory: `test-results/test-results-{DateTime}/`
+   - Format: `{DateTime}` is ISO format with colons/dots replaced by hyphens (e.g., `2024-01-15T10-30-45`)
+
+3. **File Naming**: Each test gets its own file:
+   - Format: `{TestName}_{PASSED|FAILED}.txt`
+   - Test names are sanitized (special chars replaced with underscores)
+
+4. **File Contents**: Each summary file contains:
+   - Test name and status
+   - Complete ZodQL input code (formatted)
+   - Generated GraphQL schema output
+   - Error details (if failed)
+
+This allows easy review of what each test is doing, what it generates, and why it might be failing.
+
+## Schema Validation and Linting
+
+When generating GraphQL schemas or working with schema generation:
+
+1. **Always validate generated schemas**: Run the validator (`validateGraphQLSchema`) and linter (`lintGraphQLSchema`) on all generated GraphQL schema outputs from `GraphQLSchemaGenerator`.
+
+2. **Create validation tests for feedback**: If the validator or linter provides any feedback (errors or warnings), create a new validation test that:
+   - Tests the specific situation that triggered the feedback
+   - Verifies that the GraphQL schema is valid (passes validation with no errors)
+   - Verifies that the GraphQL schema passes linting with no errors or warnings
+   - The test should pass when the schema is correctly generated and properly formatted
+
+3. **AWS AppSync Support**: The generator automatically adds AWS scalar and directive definitions to the top of the schema when they are used:
+   - AWS Scalars: `AWSDateTime`, `AWSTime`, `AWSDate`, `AWSEmail`, `AWSJSON`, `AWSJSONObject`, `AWSURL`, `AWSPhone`, `AWSIPAddress`
+   - AWS Directives: `@aws_auth(...)`, `@aws_iam`, `@aws_api_key`
+   - These definitions are automatically prepended to the schema when detected during generation
