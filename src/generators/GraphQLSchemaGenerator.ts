@@ -30,6 +30,10 @@
 import { z } from 'zod';
 import { Registry } from '../zodql/registry.js';
 import { Scalars } from '../zodql/scalars.js';
+import { PatternManager, PatternManagerOptions } from '../patterns/PatternManager.js';
+import { RelationshipRegistry } from '../zodql/relationships.js';
+import { ExtensionManager, type SchemaExtension, type ExtensionManagerOptions } from '../extensions/index.js';
+import { GenerationPhase } from '../extensions/types.js';
 
 // =================================================================================
 // Type Definitions & Interfaces
@@ -60,7 +64,7 @@ interface AuthRule {
  * Configuration object passed to the GraphQLSchemaGenerator.
  * Defines the full structure of the entity and its GraphQL API surface.
  */
-interface GeneratorConfig {
+export interface GeneratorConfig {
   /** Core entity schema (typically a ZodObject) */
   schema: z.ZodTypeAny;
 
@@ -87,6 +91,20 @@ interface GeneratorConfig {
     primary?: z.ZodTypeAny;
     composite?: z.ZodTypeAny;
   };
+}
+
+/**
+ * Options for GraphQLSchemaGenerator
+ */
+export interface GeneratorOptions {
+  /** Pattern manager options for relationship patterns (deprecated: use extensions instead) */
+  patternManager?: PatternManagerOptions;
+  
+  /** Whether to apply relationship patterns before generation (deprecated: use extensions instead) */
+  applyPatterns?: boolean;
+  
+  /** Schema extensions to use during generation */
+  extensions?: SchemaExtension[] | ExtensionManagerOptions;
 }
 
 // =================================================================================
@@ -136,16 +154,59 @@ export class GraphQLSchemaGenerator {
   /** Auth directives applied to all root operation fields (Query/Mutation/Subscription) */
   private activeAuthDirectives: string[] = [];
 
+  /** Pattern manager for relationship patterns (deprecated: use extensionManager) */
+  private patternManager?: PatternManager;
+
+  /** Extension manager for schema extensions */
+  private extensionManager?: ExtensionManager;
+
+  /** Effective config after extension/pattern application */
+  private effectiveConfig: GeneratorConfig;
+
   /**
    * Constructs a new GraphQL schema generator instance.
    *
    * @param name   The name of the primary entity type (e.g., "Post", "User")
    * @param config Configuration object defining the full API surface
+   * @param options Optional generator options including extensions
    */
   constructor(
     public readonly name: string,
-    public readonly config: GeneratorConfig
-  ) {}
+    config: GeneratorConfig,
+    options: GeneratorOptions = {}
+  ) {
+    this.effectiveConfig = config;
+
+    // Initialize extension manager if extensions are provided
+    if (options.extensions) {
+      if (Array.isArray(options.extensions)) {
+        this.extensionManager = new ExtensionManager({ extensions: options.extensions });
+      } else {
+        this.extensionManager = new ExtensionManager(options.extensions);
+      }
+    }
+
+    // Backward compatibility: Initialize pattern manager if patterns should be applied
+    // This will be deprecated in favor of extensions
+    if (options.applyPatterns !== false && options.patternManager && !this.extensionManager) {
+      this.patternManager = new PatternManager(options.patternManager);
+      
+      // Apply patterns to transform the config
+      const { modifiedConfig } = this.patternManager.applyPatterns(
+        config,
+        name,
+        true // continueOnError
+      );
+      this.effectiveConfig = modifiedConfig;
+    }
+  }
+
+  /**
+   * Get the effective configuration (after pattern application)
+   */
+  get config(): GeneratorConfig {
+    return this.effectiveConfig;
+  }
 
   // =============================================================================
   // Public API
@@ -155,77 +216,164 @@ export class GraphQLSchemaGenerator {
    * Generates and returns the complete GraphQL SDL string for the configured entity.
    *
    * The generation follows a deterministic order to ensure readable and valid output:
-   * 1. AWS scalar & directive definitions
-   * 2. Dependency types (enums, inputs, unions, objects)
-   * 3. Main entity type
-   * 4. Root operation types (Query, Mutation, Subscription)
-   * 5. Connection types
-   * 6. Key input types
+   * 1. Extension initialization
+   * 2. Extension beforeDiscovery hook
+   * 3. Dependency discovery
+   * 4. Extension afterDiscovery hook
+   * 5. Extension beforeGeneration hook
+   * 6. AWS scalar & directive definitions
+   * 7. Dependency types (enums, inputs, unions, objects)
+   * 8. Main entity type
+   * 9. Root operation types (Query, Mutation, Subscription)
+   * 10. Connection types
+   * 11. Key input types
+   * 12. Extension afterGeneration hook
    *
    * @returns Fully formed GraphQL SDL string
    */
-  public generateSchemaFile(): string {
-    const { schema, inputs, queries, mutations, subscriptions, connections, keys, auth } = this.config;
+  public async generateSchemaFile(): Promise<string>;
+  public generateSchemaFile(): string;
+  public generateSchemaFile(): string | Promise<string> {
+    return this.generateSchemaFileAsync();
+  }
+
+  /**
+   * Async version of generateSchemaFile that properly handles extensions
+   */
+  private async generateSchemaFileAsync(): Promise<string> {
+    let config = this.effectiveConfig;
+    const { schema, inputs, queries, mutations, subscriptions, connections, keys, auth } = config;
     const definitions: string[] = [];
 
-    // 1. Process global auth rules and collect required directives
-    this.processAuthConfiguration(auth);
+    // Create extension context
+    const extensionContext = {
+      config,
+      entityName: this.name,
+      registry: Registry,
+      shared: new Map<string, any>(),
+      phase: GenerationPhase.INITIALIZATION,
+    };
 
-    // 2. Discover all referenced types (populates generatedTypes)
-    this.discoverDependencies(schema);
-    this.discoverRecordDependencies(inputs);
-    this.discoverRecordDependencies(queries);
-    this.discoverRecordDependencies(mutations);
-    this.discoverRecordDependencies(subscriptions);
-    this.discoverRecordDependencies(connections);
-
-    if (keys?.primary) this.discoverDependencies(keys.primary);
-    if (keys?.composite) this.discoverDependencies(keys.composite);
-
-    // 3. Generate the main entity object type
-    if (schema instanceof z.ZodObject) {
-      definitions.push(this.generateObjectType(this.name, schema));
+    // 1. Initialize extensions
+    if (this.extensionManager) {
+      await this.extensionManager.initialize(extensionContext);
     }
 
-    // 4. Generate root operation types (Query, Mutation, Subscription)
-    if (queries) definitions.push(this.generateRootOperation('Query', queries));
-    if (mutations) definitions.push(this.generateRootOperation('Mutation', mutations));
-    if (subscriptions) definitions.push(this.generateRootOperation('Subscription', subscriptions));
+    // 2. Run beforeDiscovery hook (extensions can modify config before discovery)
+    if (this.extensionManager) {
+      extensionContext.phase = GenerationPhase.BEFORE_DISCOVERY;
+      config = await this.extensionManager.beforeDiscovery(extensionContext);
+      extensionContext.config = config;
+    }
 
-    // 5. Generate connection-related types (e.g., PostConnection)
-    if (connections) {
-      for (const [key, connectionSchema] of Object.entries(connections)) {
+    // 3. Process global auth rules and collect required directives
+    this.processAuthConfiguration(auth);
+
+    // 4. Discover all referenced types (populates generatedTypes)
+    this.discoverDependencies(config.schema);
+    this.discoverRecordDependencies(config.inputs);
+    this.discoverRecordDependencies(config.queries);
+    this.discoverRecordDependencies(config.mutations);
+    this.discoverRecordDependencies(config.subscriptions);
+    this.discoverRecordDependencies(config.connections);
+
+    if (config.keys?.primary) this.discoverDependencies(config.keys.primary);
+    if (config.keys?.composite) this.discoverDependencies(config.keys.composite);
+
+    // Discover relationship target types (types referenced in relationships)
+    this.discoverRelationshipTypes();
+    
+    // Discover additional types registered by patterns/extensions (Connection, Edge, PageInfo, etc.)
+    this.discoverPatternAdditionalTypes();
+
+    // 5. Run afterDiscovery hook (extensions can transform discovered types)
+    if (this.extensionManager) {
+      extensionContext.phase = GenerationPhase.AFTER_DISCOVERY;
+      config = await this.extensionManager.afterDiscovery(extensionContext);
+      extensionContext.config = config;
+    }
+
+    // 6. Run beforeGeneration hook (final transformations)
+    if (this.extensionManager) {
+      extensionContext.phase = GenerationPhase.BEFORE_GENERATION;
+      config = await this.extensionManager.beforeGeneration(extensionContext);
+      extensionContext.config = config;
+    }
+
+    // 7. Generate the main entity object type
+    if (config.schema instanceof z.ZodObject) {
+      definitions.push(this.generateObjectType(this.name, config.schema));
+    }
+
+    // 8. Generate root operation types (Query, Mutation, Subscription)
+    // Query is required by GraphQL spec, so always generate it (with dummy field if empty)
+    // Mutation and Subscription are optional, so only generate if they have fields
+    const hasQueries = config.queries && Object.keys(config.queries).length > 0;
+    if (hasQueries) {
+      const queryDef = this.generateRootOperation('Query', config.queries!);
+      if (queryDef) {
+        definitions.push(queryDef);
+      } else {
+        // If generateRootOperation returned empty string (no valid fields), add dummy Query
+        definitions.push('type Query {\n  empty: String\n}');
+      }
+    } else {
+      // GraphQL requires a Query type, so add a minimal one if none exists
+      definitions.push('type Query {\n  empty: String\n}');
+    }
+    if (config.mutations) {
+      const mutationDef = this.generateRootOperation('Mutation', config.mutations);
+      if (mutationDef) definitions.push(mutationDef);
+    }
+    if (config.subscriptions) {
+      const subscriptionDef = this.generateRootOperation('Subscription', config.subscriptions);
+      if (subscriptionDef) definitions.push(subscriptionDef);
+    }
+
+    // 9. Generate connection-related types (e.g., PostConnection)
+    // Connection types are always generated from connections config, even if already discovered
+    if (config.connections) {
+      for (const [key, connectionSchema] of Object.entries(config.connections)) {
         if (connectionSchema instanceof z.ZodObject) {
-          const connectionName = Registry.get(connectionSchema) || `${this.name}Connection`;
-          if (this.markAsGenerated(connectionName)) {
-            definitions.push(this.generateObjectType(connectionName, connectionSchema));
-          }
+          // Try to get the registered name first, fallback to key if not registered
+          const connectionName = Registry.get(connectionSchema) || key;
+          // Mark as generated to prevent duplicate generation in step 8
+          this.generatedTypes.add(connectionName);
+          definitions.push(this.generateObjectType(connectionName, connectionSchema));
         }
       }
     }
 
-    // 6. Generate primary/composite key input types
-    if (keys) {
-      this.generateKeyType(keys.primary, 'PrimaryKeyInput', definitions);
-      this.generateKeyType(keys.composite, 'CompositeKeyInput', definitions);
+    // 10. Generate primary/composite key input types
+    if (config.keys) {
+      this.generateKeyType(config.keys.primary, 'PrimaryKeyInput', definitions);
+      this.generateKeyType(config.keys.composite, 'CompositeKeyInput', definitions);
     }
 
-    // 7. Emit required AWS scalar and directive definitions
+    // 11. Emit required AWS scalar and directive definitions
     const awsDefs = this.generateAWSDefinitions();
 
-    // 8. Emit all discovered dependency types (enums, inputs, unions, etc.)
+    // 12. Emit all discovered dependency types (enums, inputs, unions, etc.)
     const dependencyDefs = Array.from(this.generatedTypes)
       .map((typeName) => this.generateTypeDefinition(typeName))
       .filter((def): def is string => !!def);
 
-    // 9. Assemble final SDL (AWS defs first, then dependencies, then main definitions)
-    return [
+    // 13. Assemble final SDL (AWS defs first, then dependencies, then main definitions)
+    let schemaSDL = [
       awsDefs,
       ...dependencyDefs,
       ...definitions,
     ]
       .filter(Boolean)
       .join('\n\n');
+
+    // 14. Run afterGeneration hook (extensions can modify final SDL)
+    if (this.extensionManager) {
+      extensionContext.phase = GenerationPhase.AFTER_GENERATION;
+      schemaSDL = await this.extensionManager.afterGeneration(extensionContext, schemaSDL);
+    }
+
+    return schemaSDL;
   }
 
   // =============================================================================
@@ -242,6 +390,54 @@ export class GraphQLSchemaGenerator {
     if (!record) return;
     for (const item of Object.values(record)) {
       this.discoverDependencies(item);
+    }
+  }
+
+  /**
+   * Discover types referenced in relationships
+   */
+  private discoverRelationshipTypes(): void {
+    const relationships = RelationshipRegistry.getAll();
+    for (const relationship of relationships) {
+      // Discover target type (e.g., Dashboard)
+      if (Registry.has(relationship.targetType)) {
+        const targetTypeName = Registry.get(relationship.targetType);
+        if (targetTypeName && targetTypeName !== this.name) {
+          this.generatedTypes.add(targetTypeName);
+          // Get the registered (possibly modified) version of the target type
+          // Find the last registered schema with this name (modified version from patterns)
+          let registeredSchema: z.ZodTypeAny | undefined;
+          for (const [schema, name] of Registry.entries()) {
+            if (name === targetTypeName) {
+              registeredSchema = schema; // Keep overwriting to get the last one
+            }
+          }
+          if (registeredSchema) {
+            // Discover dependencies of the registered (possibly modified) target type
+            this.discoverDependencies(registeredSchema);
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Discover additional types registered by patterns (Edge, PageInfo)
+   * Note: Connection types are handled separately via the connections config
+   */
+  private discoverPatternAdditionalTypes(): void {
+    // Look for types that patterns typically create (excluding Connection types)
+    const patternTypeSuffixes = ['Edge', 'PageInfo'];
+    
+    for (const [schema, name] of Registry.entries()) {
+      // Check if this is a pattern-generated type (but not a Connection type)
+      if (patternTypeSuffixes.some(suffix => name.endsWith(suffix))) {
+        if (!this.generatedTypes.has(name)) {
+          this.generatedTypes.add(name);
+          // Also discover dependencies of these types
+          this.discoverDependencies(schema);
+        }
+      }
     }
   }
 
@@ -270,9 +466,9 @@ export class GraphQLSchemaGenerator {
     if (zodType instanceof z.ZodFunction) {
       // Arguments are typically a tuple; we only care about the first object argument
       if (zodType._def.args instanceof z.ZodTuple) {
-        zodType._def.args.items.forEach((arg: z.ZodTypeAny) => {
+        zodType._def.args.items.forEach((arg: unknown) => {
           if (arg instanceof z.ZodObject) {
-            Object.values(arg.shape).forEach((field) => this.discoverDependencies(field));
+            Object.values(arg.shape).forEach((field) => this.discoverDependencies(field as z.ZodTypeAny));
           }
         });
       }
@@ -312,14 +508,18 @@ export class GraphQLSchemaGenerator {
    * @returns SDL string or null if the type cannot be generated
    */
   private generateTypeDefinition(typeName: string): string | null {
+    // Find the schema registered with this name
+    // If multiple schemas have the same name (e.g., original and modified),
+    // get the last one registered (which is likely the modified version from patterns)
+    // Map.entries() returns in insertion order, so last match is most recent
     let schema: z.ZodTypeAny | undefined;
+    
     for (const [regSchema, regName] of Registry.entries()) {
       if (regName === typeName) {
-        schema = regSchema;
-        break;
+        schema = regSchema; // Keep overwriting to get the last one
       }
     }
-
+    
     if (!schema) return null;
 
     // Enums
@@ -356,6 +556,7 @@ export class GraphQLSchemaGenerator {
   ): string {
     const lines = [`type ${type} {`];
     const authString = this.activeAuthDirectives.length ? ` ${this.activeAuthDirectives.join(' ')}` : '';
+    let hasFields = false;
 
     for (const [opName, opSchema] of Object.entries(operations)) {
       if (opSchema instanceof z.ZodFunction) {
@@ -363,8 +564,15 @@ export class GraphQLSchemaGenerator {
         const returnType = this.zodTypeToGraphQL(opSchema._def.returns, false);
         const argsStr = args.length > 0 ? `(${args.join(', ')})` : '';
         lines.push(`  ${opName}${argsStr}: ${returnType}${authString}`);
+        hasFields = true;
       }
     }
+    
+    // GraphQL doesn't allow empty types, so return empty string if no fields
+    if (!hasFields) {
+      return '';
+    }
+    
     lines.push('}');
     return lines.join('\n');
   }
@@ -399,8 +607,16 @@ export class GraphQLSchemaGenerator {
   ): string {
     const lines = [`${kind} ${name} {`];
     for (const [fieldName, fieldSchema] of Object.entries(schema.shape)) {
-      const typeStr = this.zodTypeToGraphQL(fieldSchema as z.ZodTypeAny, allowDefaults);
-      lines.push(`  ${fieldName}: ${typeStr}`);
+      // Handle ZodFunction fields (for connection fields with arguments)
+      if (fieldSchema instanceof z.ZodFunction) {
+        const args = this.extractFunctionArgs(fieldSchema);
+        const returnType = this.zodTypeToGraphQL(fieldSchema._def.returns, false);
+                const argsStr = args.length > 0 ? `(${args.join(', ')})` : '';
+        lines.push(`  ${fieldName}${argsStr}: ${returnType}`);
+      } else {
+        const typeStr = this.zodTypeToGraphQL(fieldSchema as z.ZodTypeAny, allowDefaults);
+        lines.push(`  ${fieldName}: ${typeStr}`);
+      }
     }
     lines.push('}');
     return lines.join('\n');
@@ -494,6 +710,11 @@ export class GraphQLSchemaGenerator {
         return `${unionName}!`;
       }
       return 'String!'; // Safe fallback
+    }
+
+    // --- Functions (for connection fields with arguments) ---
+    if (zodType instanceof z.ZodFunction) {
+      return this.zodTypeToGraphQL(zodType._def.returns, false);
     }
 
     // --- Base Scalars & Registered Types ---

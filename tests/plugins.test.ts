@@ -241,7 +241,7 @@ describe('PluginManager', () => {
       const results = await manager.runPlugins(generatorWithoutQueries);
 
       expect(results[0].success).toBe(false);
-      expect(results[0].output.errors).toContain('No queries found');
+      expect(results[0].output.errors).toContain('Plugin validation failed: No queries found');
     });
   });
 
@@ -338,8 +338,25 @@ describe('PluginManager', () => {
         parallel: true,
       });
 
-      const plugin1 = new AsyncPlugin();
-      const plugin2 = new AsyncPlugin();
+      // Create unique plugin instances with different names
+      class AsyncPlugin1 extends AsyncPlugin {
+        metadata = {
+          name: 'async-plugin-1',
+          version: '1.0.0',
+          description: 'Async plugin 1',
+        };
+      }
+      
+      class AsyncPlugin2 extends AsyncPlugin {
+        metadata = {
+          name: 'async-plugin-2',
+          version: '1.0.0',
+          description: 'Async plugin 2',
+        };
+      }
+
+      const plugin1 = new AsyncPlugin1();
+      const plugin2 = new AsyncPlugin2();
       manager.register(plugin1);
       manager.register(plugin2);
 

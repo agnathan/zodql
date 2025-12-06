@@ -116,7 +116,7 @@ describe('Validator and Linter on GraphQLSchemaGenerator Output', () => {
     Registry.clear();
   });
 
-  it('should validate and lint generated schema with scalars', () => {
+  it('should validate and lint generated schema with scalars', async () => {
     const User = defineObject('User', {
       fields: {
         id: Scalars.ID,
@@ -132,7 +132,7 @@ describe('Validator and Linter on GraphQLSchemaGenerator Output', () => {
       },
     });
 
-    const schema = generator.generateSchemaFile();
+    const schema = await generator.generateSchemaFile();
 
     // Validate
     const validation = validateGraphQLSchema(schema);
@@ -151,7 +151,7 @@ describe('Validator and Linter on GraphQLSchemaGenerator Output', () => {
     // May have warnings for missing descriptions, which is acceptable
   });
 
-  it('should validate and lint generated schema with enums', () => {
+  it('should validate and lint generated schema with enums', async () => {
     const UserRole = defineEnum('UserRole', ['ADMIN', 'USER', 'GUEST']);
     const User = defineObject('User', {
       fields: {
@@ -167,7 +167,7 @@ describe('Validator and Linter on GraphQLSchemaGenerator Output', () => {
       },
     });
 
-    const schema = generator.generateSchemaFile();
+    const schema = await generator.generateSchemaFile();
 
     // Validate
     const validation = validateGraphQLSchema(schema);
@@ -185,7 +185,7 @@ describe('Validator and Linter on GraphQLSchemaGenerator Output', () => {
     expect(linting.errorCount).toBe(0);
   });
 
-  it('should validate and lint generated schema with input types', () => {
+  it('should validate and lint generated schema with input types', async () => {
     const CreateUserInput = defineInput('CreateUserInput', {
       username: Scalars.String,
       email: Scalars.String,
@@ -211,7 +211,7 @@ describe('Validator and Linter on GraphQLSchemaGenerator Output', () => {
       },
     });
 
-    const schema = generator.generateSchemaFile();
+    const schema = await generator.generateSchemaFile();
 
     // Validate
     const validation = validateGraphQLSchema(schema);
@@ -229,7 +229,7 @@ describe('Validator and Linter on GraphQLSchemaGenerator Output', () => {
     expect(linting.errorCount).toBe(0);
   });
 
-  it('should validate and lint generated schema with queries, mutations, and subscriptions', () => {
+  it('should validate and lint generated schema with queries, mutations, and subscriptions', async () => {
     const User = defineObject('User', {
       fields: {
         id: Scalars.ID,
@@ -251,7 +251,7 @@ describe('Validator and Linter on GraphQLSchemaGenerator Output', () => {
       },
     });
 
-    const schema = generator.generateSchemaFile();
+    const schema = await generator.generateSchemaFile();
 
     // Validate
     const validation = validateGraphQLSchema(schema);
@@ -269,7 +269,7 @@ describe('Validator and Linter on GraphQLSchemaGenerator Output', () => {
     expect(linting.errorCount).toBe(0);
   });
 
-  it('should validate and lint complex generated schema with unions and interfaces', () => {
+  it('should validate and lint complex generated schema with unions and interfaces', async () => {
     const Node = defineInterface('Node', {
       id: Scalars.ID,
     });
@@ -302,7 +302,7 @@ describe('Validator and Linter on GraphQLSchemaGenerator Output', () => {
       },
     });
 
-    const schema = generator.generateSchemaFile();
+    const schema = await generator.generateSchemaFile();
 
     // Validate
     const validation = validateGraphQLSchema(schema);

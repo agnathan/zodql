@@ -35,7 +35,8 @@ function captureSchema(schema: string) {
 }
 
 // Helper to wrap tests with automatic input/output capture
-function withTestCapture(zodqlCode: string, testFn: () => void) {
+// Supports both sync and async test functions
+async function withTestCapture(zodqlCode: string, testFn: () => void | Promise<void>) {
   if (!currentTestName) {
     throw new Error("Test name not set. Make sure beforeEach is running.");
   }
@@ -44,7 +45,11 @@ function withTestCapture(zodqlCode: string, testFn: () => void) {
   let passed = false;
 
   try {
-    testFn();
+    const result = testFn();
+    // Handle async test functions
+    if (result instanceof Promise) {
+      await result;
+    }
     passed = true;
   } catch (error: any) {
     captureTestError(error.message || String(error));
@@ -91,7 +96,7 @@ describe("GraphQLSchemaGenerator - ZODQL Guide Tests", () => {
   });
 
   describe("Scalar Types", () => {
-    it("should generate GraphQL schema with built-in scalars", () => {
+    it("should generate GraphQL schema with built-in scalars", async () => {
       const zodqlCode = `
 const UserSchema = z.object({
   id: Scalars.ID,
@@ -109,7 +114,7 @@ const generator = new GraphQLSchemaGenerator("User", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const UserSchema = z.object({
           id: Scalars.ID,
           name: Scalars.String,
@@ -123,7 +128,7 @@ const schema = generator.generateSchemaFile();
           schema: UserSchema,
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         expect(schema).toContain("type User");
         expect(schema).toContain("id: ID!");
@@ -135,7 +140,7 @@ const schema = generator.generateSchemaFile();
       });
     });
 
-    it("should generate custom scalar types", () => {
+    it("should generate custom scalar types", async () => {
       const zodqlCode = `
 const Email = register("Email", z.string().email());
 const URL = register("URL", z.string().url());
@@ -152,7 +157,7 @@ const generator = new GraphQLSchemaGenerator("Contact", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const Email = register("Email", z.string().email());
         const URL = register("URL", z.string().url());
 
@@ -165,7 +170,7 @@ const schema = generator.generateSchemaFile();
           schema: ContactSchema,
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         // Note: Custom scalars need to be defined separately, but the type should reference them
         expect(schema).toContain("type Contact");
@@ -176,7 +181,7 @@ const schema = generator.generateSchemaFile();
   });
 
   describe("Enum Types", () => {
-    it("should generate GraphQL enum definition", () => {
+    it("should generate GraphQL enum definition", async () => {
       const zodqlCode = `
 const UserRole = defineEnum("UserRole", ["ADMIN", "USER", "GUEST"]);
 
@@ -192,7 +197,7 @@ const generator = new GraphQLSchemaGenerator("User", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const UserRole = defineEnum("UserRole", ["ADMIN", "USER", "GUEST"]);
 
         const UserSchema = z.object({
@@ -204,7 +209,7 @@ const schema = generator.generateSchemaFile();
           schema: UserSchema,
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         expect(schema).toContain("enum UserRole");
         expect(schema).toContain("ADMIN");
@@ -214,7 +219,7 @@ const schema = generator.generateSchemaFile();
       });
     });
 
-    it("should use enum in input types", () => {
+    it("should use enum in input types", async () => {
       const zodqlCode = `
 const UserRole = defineEnum("UserRole", ["ADMIN", "USER", "GUEST"]);
 
@@ -233,7 +238,7 @@ const generator = new GraphQLSchemaGenerator("User", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const UserRole = defineEnum("UserRole", ["ADMIN", "USER", "GUEST"]);
 
         const CreateUserInput = defineInput("CreateUserInput", {
@@ -248,7 +253,7 @@ const schema = generator.generateSchemaFile();
           },
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         expect(schema).toContain("input CreateUserInput");
         expect(schema).toContain("username: String!");
@@ -258,7 +263,7 @@ const schema = generator.generateSchemaFile();
   });
 
   describe("Input Object Types", () => {
-    it("should generate basic input type", () => {
+    it("should generate basic input type", async () => {
       const zodqlCode = `
 const CreateUserInput = defineInput("CreateUserInput", {
   username: Scalars.String,
@@ -277,7 +282,7 @@ const generator = new GraphQLSchemaGenerator("User", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const CreateUserInput = defineInput("CreateUserInput", {
           username: Scalars.String,
           email: Scalars.String,
@@ -292,7 +297,7 @@ const schema = generator.generateSchemaFile();
           },
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         expect(schema).toContain("input CreateUserInput");
         expect(schema).toContain("username: String!");
@@ -301,7 +306,7 @@ const schema = generator.generateSchemaFile();
       });
     });
 
-    it("should generate update input type with optional fields", () => {
+    it("should generate update input type with optional fields", async () => {
       const zodqlCode = `
 const UpdateUserInput = defineInput("UpdateUserInput", {
   username: Scalars.String.optional(),
@@ -319,7 +324,7 @@ const generator = new GraphQLSchemaGenerator("User", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const UpdateUserInput = defineInput("UpdateUserInput", {
           username: Scalars.String.optional(),
           email: Scalars.String.optional(),
@@ -333,7 +338,7 @@ const schema = generator.generateSchemaFile();
           },
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         expect(schema).toContain("input UpdateUserInput");
         expect(schema).toContain("username: String");
@@ -342,7 +347,7 @@ const schema = generator.generateSchemaFile();
       });
     });
 
-    it("should generate nested input types", () => {
+    it("should generate nested input types", async () => {
       const zodqlCode = `
 const AddressInput = defineInput("AddressInput", {
   street: Scalars.String,
@@ -365,7 +370,7 @@ const generator = new GraphQLSchemaGenerator("User", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const AddressInput = defineInput("AddressInput", {
           street: Scalars.String,
           city: Scalars.String,
@@ -384,7 +389,7 @@ const schema = generator.generateSchemaFile();
           },
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         expect(schema).toContain("input AddressInput");
         expect(schema).toContain("input CreateUserInput");
@@ -392,7 +397,7 @@ const schema = generator.generateSchemaFile();
       });
     });
 
-    it("should generate input types with default values", () => {
+    it("should generate input types with default values", async () => {
       const zodqlCode = `
 const CreatePostInput = defineInput("CreatePostInput", {
   title: Scalars.String,
@@ -411,7 +416,7 @@ const generator = new GraphQLSchemaGenerator("Post", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const CreatePostInput = defineInput("CreatePostInput", {
           title: Scalars.String,
           content: Scalars.String,
@@ -426,7 +431,7 @@ const schema = generator.generateSchemaFile();
           },
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         expect(schema).toContain("input CreatePostInput");
         expect(schema).toContain("published: Boolean! = false");
@@ -436,7 +441,7 @@ const schema = generator.generateSchemaFile();
   });
 
   describe("Interface Types", () => {
-    it("should generate interface definition", () => {
+    it("should generate interface definition", async () => {
       const zodqlCode = `
 const Node = defineInterface("Node", {
   id: Scalars.ID,
@@ -456,7 +461,7 @@ const generator = new GraphQLSchemaGenerator("User", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const Node = defineInterface("Node", {
           id: Scalars.ID,
           createdAt: Scalars.DateTime,
@@ -472,7 +477,7 @@ const schema = generator.generateSchemaFile();
           }),
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         expect(schema).toContain("type User");
         expect(schema).toContain("id: ID!");
@@ -482,7 +487,7 @@ const schema = generator.generateSchemaFile();
       });
     });
 
-    it("should generate object type implementing interface", () => {
+    it("should generate object type implementing interface", async () => {
       const zodqlCode = `
 const Node = defineInterface("Node", {
   id: Scalars.ID,
@@ -505,7 +510,7 @@ const generator = new GraphQLSchemaGenerator("User", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const Node = defineInterface("Node", {
           id: Scalars.ID,
           createdAt: Scalars.DateTime,
@@ -524,7 +529,7 @@ const schema = generator.generateSchemaFile();
           schema: User,
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         expect(schema).toContain("type User");
         expect(schema).toContain("id: ID!");
@@ -533,7 +538,7 @@ const schema = generator.generateSchemaFile();
       });
     });
 
-    it("should generate object type implementing multiple interfaces", () => {
+    it("should generate object type implementing multiple interfaces", async () => {
       const zodqlCode = `
 const Timestamped = defineInterface("Timestamped", {
   createdAt: Scalars.DateTime,
@@ -559,7 +564,7 @@ const generator = new GraphQLSchemaGenerator("Post", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const Timestamped = defineInterface("Timestamped", {
           createdAt: Scalars.DateTime,
           updatedAt: Scalars.DateTime,
@@ -581,7 +586,7 @@ const schema = generator.generateSchemaFile();
           schema: Post,
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         expect(schema).toContain("type Post");
         expect(schema).toContain("createdAt: AWSDateTime!");
@@ -594,7 +599,7 @@ const schema = generator.generateSchemaFile();
   });
 
   describe("Object Types", () => {
-    it("should generate basic object type", () => {
+    it("should generate basic object type", async () => {
       const zodqlCode = `
 const User = defineObject("User", {
   fields: {
@@ -612,7 +617,7 @@ const generator = new GraphQLSchemaGenerator("User", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const User = defineObject("User", {
           fields: {
             id: Scalars.ID,
@@ -626,7 +631,7 @@ const schema = generator.generateSchemaFile();
           schema: User,
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         expect(schema).toContain("type User");
         expect(schema).toContain("id: ID!");
@@ -636,7 +641,7 @@ const schema = generator.generateSchemaFile();
       });
     });
 
-    it("should generate object type with optional fields", () => {
+    it("should generate object type with optional fields", async () => {
       const zodqlCode = `
 const User = defineObject("User", {
   fields: {
@@ -654,7 +659,7 @@ const generator = new GraphQLSchemaGenerator("User", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const User = defineObject("User", {
           fields: {
             id: Scalars.ID,
@@ -668,7 +673,7 @@ const schema = generator.generateSchemaFile();
           schema: User,
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         expect(schema).toContain("type User");
         expect(schema).toContain("email: String");
@@ -676,7 +681,7 @@ const schema = generator.generateSchemaFile();
       });
     });
 
-    it("should generate object type with lists", () => {
+    it("should generate object type with lists", async () => {
       const zodqlCode = `
 const Comment = defineObject("Comment", {
   fields: {
@@ -701,7 +706,7 @@ const generator = new GraphQLSchemaGenerator("Post", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const Comment = defineObject("Comment", {
           fields: {
             id: Scalars.ID,
@@ -722,7 +727,7 @@ const schema = generator.generateSchemaFile();
           schema: Post,
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         expect(schema).toContain("type Post");
         expect(schema).toContain("tags: [String!]!");
@@ -730,7 +735,7 @@ const schema = generator.generateSchemaFile();
       });
     });
 
-    it("should generate object type with nested objects", () => {
+    it("should generate object type with nested objects", async () => {
       const zodqlCode = `
 const Address = defineObject("Address", {
   fields: {
@@ -755,7 +760,7 @@ const generator = new GraphQLSchemaGenerator("User", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const Address = defineObject("Address", {
           fields: {
             street: Scalars.String,
@@ -776,7 +781,7 @@ const schema = generator.generateSchemaFile();
           schema: User,
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         expect(schema).toContain("type User");
         expect(schema).toContain("address: Address!");
@@ -785,7 +790,7 @@ const schema = generator.generateSchemaFile();
   });
 
   describe("Union Types", () => {
-    it("should generate union type definition", () => {
+    it("should generate union type definition", async () => {
       const zodqlCode = `
 const Dog = defineObject("Dog", {
   fields: {
@@ -813,7 +818,7 @@ const generator = new GraphQLSchemaGenerator("User", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const Dog = defineObject("Dog", {
           fields: {
             name: Scalars.String,
@@ -837,14 +842,14 @@ const schema = generator.generateSchemaFile();
           }),
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         expect(schema).toContain("type User");
         expect(schema).toContain("favoritePet:");
       });
     });
 
-    it("should generate union with multiple types", () => {
+    it("should generate union with multiple types", async () => {
       const zodqlCode = `
 const Dog = defineObject("Dog", {
   fields: { name: Scalars.String, breed: Scalars.String },
@@ -870,7 +875,7 @@ const generator = new GraphQLSchemaGenerator("User", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const Dog = defineObject("Dog", {
           fields: { name: Scalars.String, breed: Scalars.String },
         });
@@ -892,7 +897,7 @@ const schema = generator.generateSchemaFile();
           }),
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         expect(schema).toContain("type User");
         expect(schema).toContain("pet:");
@@ -901,7 +906,7 @@ const schema = generator.generateSchemaFile();
   });
 
   describe("Field Definitions with Arguments", () => {
-    it("should generate query operations with field arguments", () => {
+    it("should generate query operations with field arguments", async () => {
       const zodqlCode = `
 const User = defineObject("User", {
   fields: {
@@ -922,7 +927,7 @@ const generator = new GraphQLSchemaGenerator("User", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const User = defineObject("User", {
           fields: {
             id: Scalars.ID,
@@ -939,7 +944,7 @@ const schema = generator.generateSchemaFile();
           },
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         expect(schema).toContain("type Query");
         expect(schema).toContain("getUser");
@@ -948,7 +953,7 @@ const schema = generator.generateSchemaFile();
       });
     });
 
-    it("should generate mutation operations with input types", () => {
+    it("should generate mutation operations with input types", async () => {
       const zodqlCode = `
 const User = defineObject("User", {
   fields: {
@@ -979,7 +984,7 @@ const generator = new GraphQLSchemaGenerator("User", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const User = defineObject("User", {
           fields: {
             id: Scalars.ID,
@@ -1006,7 +1011,7 @@ const schema = generator.generateSchemaFile();
           },
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         expect(schema).toContain("type Mutation");
         expect(schema).toContain("createUser");
@@ -1015,7 +1020,7 @@ const schema = generator.generateSchemaFile();
       });
     });
 
-    it("should generate subscription operations", () => {
+    it("should generate subscription operations", async () => {
       const zodqlCode = `
 const User = defineObject("User", {
   fields: {
@@ -1036,7 +1041,7 @@ const generator = new GraphQLSchemaGenerator("User", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const User = defineObject("User", {
           fields: {
             id: Scalars.ID,
@@ -1053,7 +1058,7 @@ const schema = generator.generateSchemaFile();
           },
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         expect(schema).toContain("type Subscription");
         expect(schema).toContain("onUserCreated");
@@ -1062,7 +1067,7 @@ const schema = generator.generateSchemaFile();
       });
     });
 
-    it("should generate field with optional arguments", () => {
+    it("should generate field with optional arguments", async () => {
       const zodqlCode = `
 const Post = defineObject("Post", {
   fields: {
@@ -1091,7 +1096,7 @@ const generator = new GraphQLSchemaGenerator("Post", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const Post = defineObject("Post", {
           fields: {
             id: Scalars.ID,
@@ -1116,7 +1121,7 @@ const schema = generator.generateSchemaFile();
           },
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         expect(schema).toContain("listPosts");
       });
@@ -1124,7 +1129,7 @@ const schema = generator.generateSchemaFile();
   });
 
   describe("Root Operations", () => {
-    it("should generate Query type with operations", () => {
+    it("should generate Query type with operations", async () => {
       const User = defineObject("User", {
         fields: {
           id: Scalars.ID,
@@ -1173,7 +1178,7 @@ const generator = new GraphQLSchemaGenerator("User", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const User = defineObject("User", {
           fields: {
             id: Scalars.ID,
@@ -1196,7 +1201,7 @@ const schema = generator.generateSchemaFile();
           },
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         expect(schema).toContain("type Query");
         expect(schema).toContain("getUser");
@@ -1204,7 +1209,7 @@ const schema = generator.generateSchemaFile();
       });
     });
 
-    it("should generate Mutation type with operations", () => {
+    it("should generate Mutation type with operations", async () => {
       const zodqlCode = `
 const User = defineObject("User", {
   fields: {
@@ -1229,7 +1234,7 @@ const generator = new GraphQLSchemaGenerator("User", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const User = defineObject("User", {
           fields: {
             id: Scalars.ID,
@@ -1250,7 +1255,7 @@ const schema = generator.generateSchemaFile();
           },
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         expect(schema).toContain("type Mutation");
         expect(schema).toContain("createUser");
@@ -1259,7 +1264,7 @@ const schema = generator.generateSchemaFile();
       });
     });
 
-    it("should generate Subscription type with operations", () => {
+    it("should generate Subscription type with operations", async () => {
       const zodqlCode = `
 const User = defineObject("User", {
   fields: {
@@ -1279,7 +1284,7 @@ const generator = new GraphQLSchemaGenerator("User", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const User = defineObject("User", {
           fields: {
             id: Scalars.ID,
@@ -1295,7 +1300,7 @@ const schema = generator.generateSchemaFile();
           },
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         expect(schema).toContain("type Subscription");
         expect(schema).toContain("onUserCreated");
@@ -1305,7 +1310,7 @@ const schema = generator.generateSchemaFile();
   });
 
   describe("Resource Factory Pattern", () => {
-    it("should generate CRUD operations from resource factory", () => {
+    it("should generate CRUD operations from resource factory", async () => {
       const zodqlCode = `
 const PostResource = createResource("Post", {
   title: Scalars.String,
@@ -1326,7 +1331,7 @@ const generator = new GraphQLSchemaGenerator("Post", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const PostResource = createResource("Post", {
           title: Scalars.String,
           content: Scalars.String,
@@ -1343,7 +1348,7 @@ const schema = generator.generateSchemaFile();
           mutations: PostResource.ops.mutation,
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         expect(schema).toContain("type Post");
         expect(schema).toContain("id: ID!");
@@ -1361,7 +1366,7 @@ const schema = generator.generateSchemaFile();
       });
     });
 
-    it("should generate connection type for list operations", () => {
+    it("should generate connection type for list operations", async () => {
       const zodqlCode = `
 const PostResource = createResource("Post", {
   title: Scalars.String,
@@ -1386,16 +1391,16 @@ const generator = new GraphQLSchemaGenerator("Post", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const PostResource = createResource("Post", {
           title: Scalars.String,
           content: Scalars.String,
         });
 
-        const PostConnection = z.object({
+        const PostConnection = register("PostConnection", z.object({
           items: z.array(PostResource.Schemas.Entity),
           nextToken: Scalars.String.optional(),
-        });
+        }));
 
         const generator = new GraphQLSchemaGenerator("Post", {
           schema: PostResource.Schemas.Entity,
@@ -1407,7 +1412,7 @@ const schema = generator.generateSchemaFile();
           },
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         expect(schema).toContain("type PostConnection");
         expect(schema).toContain("items: [Post!]!");
@@ -1417,7 +1422,7 @@ const schema = generator.generateSchemaFile();
   });
 
   describe("Complete Examples", () => {
-    it("should generate Blog API schema", () => {
+    it("should generate Blog API schema", async () => {
       const zodqlCode = `
 const PostStatus = defineEnum("PostStatus", [
   "DRAFT",
@@ -1472,7 +1477,7 @@ const generator = new GraphQLSchemaGenerator("Post", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const PostStatus = defineEnum("PostStatus", [
           "DRAFT",
           "PUBLISHED",
@@ -1523,7 +1528,7 @@ const schema = generator.generateSchemaFile();
           },
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         expect(schema).toContain("enum PostStatus");
         expect(schema).toContain("type Post");
@@ -1534,7 +1539,7 @@ const schema = generator.generateSchemaFile();
       });
     });
 
-    it("should generate complex schema with unions and interfaces", () => {
+    it("should generate complex schema with unions and interfaces", async () => {
       const zodqlCode = `
 const Node = defineInterface("Node", {
   id: Scalars.ID,
@@ -1571,7 +1576,7 @@ const generator = new GraphQLSchemaGenerator("User", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const Node = defineInterface("Node", {
           id: Scalars.ID,
         });
@@ -1604,7 +1609,7 @@ const schema = generator.generateSchemaFile();
           },
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         expect(schema).toContain("type User");
         expect(schema).toContain("id: ID!");
@@ -1615,7 +1620,7 @@ const schema = generator.generateSchemaFile();
   });
 
   describe("Edge Cases and Advanced Features", () => {
-    it("should handle empty input types gracefully", () => {
+    it("should handle empty input types gracefully", async () => {
       const zodqlCode = `
 const EmptyInput = defineInput("EmptyInput", {});
 
@@ -1629,7 +1634,7 @@ const generator = new GraphQLSchemaGenerator("Test", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const EmptyInput = defineInput("EmptyInput", {});
 
         const generator = new GraphQLSchemaGenerator("Test", {
@@ -1639,14 +1644,14 @@ const schema = generator.generateSchemaFile();
           },
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         // Empty input types should not cause errors
         expect(schema).toBeTruthy();
       });
     });
 
-    it("should handle relationships as fields", () => {
+    it("should handle relationships as fields", async () => {
       const zodqlCode = `
 const Comment = defineObject("Comment", {
   fields: {
@@ -1670,7 +1675,7 @@ const generator = new GraphQLSchemaGenerator("Post", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const Comment = defineObject("Comment", {
           fields: {
             id: Scalars.ID,
@@ -1690,7 +1695,7 @@ const schema = generator.generateSchemaFile();
           schema: Post,
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         expect(schema).toContain("type Post");
         expect(schema).toContain("comments:");
@@ -1698,7 +1703,7 @@ const schema = generator.generateSchemaFile();
       });
     });
 
-    it("should handle auth directives", () => {
+    it("should handle auth directives", async () => {
       const zodqlCode = `
 const User = defineObject("User", {
   fields: {
@@ -1721,7 +1726,7 @@ const generator = new GraphQLSchemaGenerator("User", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const User = defineObject("User", {
           fields: {
             id: Scalars.ID,
@@ -1740,14 +1745,14 @@ const schema = generator.generateSchemaFile();
           },
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         expect(schema).toContain("@aws_iam");
         expect(schema).toContain("@aws_cognito_user_pools");
       });
     });
 
-    it("should handle key input types", () => {
+    it("should handle key input types", async () => {
       const zodqlCode = `
 const User = defineObject("User", {
   fields: {
@@ -1779,7 +1784,7 @@ const generator = new GraphQLSchemaGenerator("User", {
 const schema = generator.generateSchemaFile();
 `.trim();
 
-      withTestCapture(zodqlCode, () => {
+      await withTestCapture(zodqlCode, async () => {
         const User = defineObject("User", {
           fields: {
             id: Scalars.ID,
@@ -1807,7 +1812,7 @@ const schema = generator.generateSchemaFile();
           },
         });
 
-        const schema = captureSchema(generator.generateSchemaFile());
+        const schema = captureSchema(await generator.generateSchemaFile());
 
         expect(schema).toContain("input PrimaryKeyInput");
         expect(schema).toContain("input CompositeKeyInput");
