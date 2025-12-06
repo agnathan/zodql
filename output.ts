@@ -1,0 +1,836 @@
+import { z } from "zod";
+import {
+  Scalars,
+  defineEnum,
+  defineInput,
+  defineInterface,
+  defineObject,
+  defineUnion,
+  field,
+  register,
+} from "zodql";
+import { GraphQLSchemaGenerator } from "zodql";
+
+const AWSDateTime = register("AWSDateTime", z.string());
+
+const AWSJSON = register("AWSJSON", z.string());
+
+const EntityType = defineEnum("EntityType", [
+  "PROJECT",
+  "DOCLINK",
+  "WORKFLOW",
+  "DASHBOARD",
+  "DATASOURCE",
+  "PRODUCT_LISTING",
+  "PRODUCT_VERSION",
+  "SUBSCRIPTION",
+]);
+
+const PermissionScope = defineEnum("PermissionScope", [
+  "PRIVATE",
+  "TENANT",
+  "SYSTEM",
+]);
+
+const ListScope = defineEnum("ListScope", [
+  "OWNED_BY_ME",
+  "SHARED_WITH_ME",
+  "ALL_TENANT",
+]);
+
+const ProjectStatus = defineEnum("ProjectStatus", [
+  "ACTIVE",
+  "ARCHIVED",
+  "DELETED",
+]);
+
+const DocLinkStatus = defineEnum("DocLinkStatus", [
+  "notUploaded",
+  "uploaded",
+  "processing",
+  "ready",
+  "failed",
+]);
+
+const SubscriptionStatus = defineEnum("SubscriptionStatus", [
+  "ACTIVE",
+  "PAST_DUE",
+  "CANCELED",
+  "EXPIRED",
+]);
+
+const PresenceAction = defineEnum("PresenceAction", [
+  "VIEWING",
+  "TYPING",
+  "EDITING",
+  "IDLE",
+]);
+
+const SortDirection = defineEnum("SortDirection", ["ASC", "DESC"]);
+
+const ProjectSortField = defineEnum("ProjectSortField", ["UPDATED_AT", "NAME"]);
+
+const ResourcePermissions = defineObject("ResourcePermissions", {
+  fields: {
+    canEdit: Scalars.Boolean,
+    canDelete: Scalars.Boolean,
+    canShare: Scalars.Boolean,
+  },
+});
+
+const SystemNode = defineInterface("SystemNode", {
+  fields: {
+    id: Scalars.ID,
+    entityType: EntityType,
+    tenantId: Scalars.ID,
+    ownerId: Scalars.ID,
+    createdAt: Scalars.DateTime,
+    updatedAt: Scalars.DateTime,
+    deletedAt: Scalars.DateTime.optional(),
+    ttl: Scalars.Int.optional(),
+    forkedFromId: Scalars.ID.optional(),
+    forkedFromVersion: Scalars.String.optional(),
+    permissions: ResourcePermissions,
+  },
+});
+
+const Paginate = defineInterface("Paginate", {
+  fields: {
+    id: Scalars.ID,
+    updatedAt: Scalars.DateTime,
+  },
+});
+
+const Shareable = defineInterface("Shareable", {
+  fields: {
+    sharedWith: z.array(Scalars.String.optional()).optional(),
+  },
+});
+
+const LicensedItem = defineInterface("LicensedItem", {
+  fields: {
+    subscriptionId: Scalars.ID.optional(),
+    isLocked: Scalars.Boolean,
+  },
+});
+
+const PrimaryKeyInput = defineInput("PrimaryKeyInput", {
+  id: Scalars.ID,
+});
+
+const ParentKeyInput = defineInput("ParentKeyInput", {
+  parentId: Scalars.ID,
+});
+
+const CompositeKeyInput = defineInput("CompositeKeyInput", {
+  id: Scalars.ID,
+  parentId: Scalars.ID,
+});
+
+const PaginateInput = defineInput("PaginateInput", {
+  first: Scalars.Int.optional(),
+  after: Scalars.String.optional(),
+  last: Scalars.Int.optional(),
+  before: Scalars.String.optional(),
+});
+
+const ForkEntityInput = defineInput("ForkEntityInput", {
+  sourceKey: PrimaryKeyInput,
+  targetScope: PermissionScope,
+  name: Scalars.String.optional(),
+  description: Scalars.String.optional(),
+});
+
+const ProjectSortInput = defineInput("ProjectSortInput", {
+  field: ProjectSortField.optional(),
+  direction: SortDirection.optional(),
+});
+
+const ProjectFilterInput = defineInput("ProjectFilterInput", {
+  status: ProjectStatus.optional(),
+  nameContains: Scalars.String.optional(),
+});
+
+const CreateProjectInput = defineInput("CreateProjectInput", {
+  name: Scalars.String,
+  description: Scalars.String.optional(),
+  status: ProjectStatus.optional(),
+  sharingMode: PermissionScope.optional(),
+});
+
+const UpdateProjectInput = defineInput("UpdateProjectInput", {
+  name: Scalars.String.optional(),
+  description: Scalars.String.optional(),
+  status: ProjectStatus.optional(),
+  sharedWith: z.array(Scalars.String.optional()).optional(),
+});
+
+const CreateDocLinkInput = defineInput("CreateDocLinkInput", {
+  documentId: Scalars.ID,
+  filename: Scalars.String,
+  status: DocLinkStatus.optional(),
+});
+
+const UpdateDocLinkInput = defineInput("UpdateDocLinkInput", {
+  filename: Scalars.String.optional(),
+  status: DocLinkStatus.optional(),
+});
+
+const WorkflowSortInput = defineInput("WorkflowSortInput", {
+  field: ProjectSortField.optional(),
+  direction: SortDirection.optional(),
+});
+
+const WorkflowFilterInput = defineInput("WorkflowFilterInput", {
+  nameContains: Scalars.String.optional(),
+});
+
+const CreateWorkflowInput = defineInput("CreateWorkflowInput", {
+  name: Scalars.String,
+  definitionYaml: Scalars.String,
+});
+
+const UpdateWorkflowInput = defineInput("UpdateWorkflowInput", {
+  name: Scalars.String.optional(),
+  definitionYaml: Scalars.String.optional(),
+});
+
+const DashboardSortInput = defineInput("DashboardSortInput", {
+  field: ProjectSortField.optional(),
+  direction: SortDirection.optional(),
+});
+
+const CreateDashboardInput = defineInput("CreateDashboardInput", {
+  title: Scalars.String,
+  layoutConfig: Scalars.JSON,
+});
+
+const UpdateDashboardInput = defineInput("UpdateDashboardInput", {
+  title: Scalars.String.optional(),
+  layoutConfig: Scalars.JSON.optional(),
+});
+
+const UserError = defineObject("UserError", {
+  fields: {
+    message: Scalars.String,
+    code: Scalars.String,
+    field: z.array(Scalars.String.optional()).optional(),
+  },
+});
+
+const PageInfo = defineObject("PageInfo", {
+  fields: {
+    hasNextPage: Scalars.Boolean,
+    hasPreviousPage: Scalars.Boolean,
+    startCursor: Scalars.String.optional(),
+    endCursor: Scalars.String.optional(),
+  },
+});
+const DocLink = defineObject("DocLink", {
+  fields: {
+    id: Scalars.ID,
+    entityType: EntityType,
+    tenantId: Scalars.ID,
+    ownerId: Scalars.ID,
+    createdAt: Scalars.DateTime,
+    updatedAt: Scalars.DateTime,
+    deletedAt: Scalars.DateTime.optional(),
+    ttl: Scalars.Int.optional(),
+    forkedFromId: Scalars.ID.optional(),
+    forkedFromVersion: Scalars.String.optional(),
+    permissions: ResourcePermissions,
+    parentId: Scalars.ID,
+    documentId: Scalars.ID,
+    filename: Scalars.String,
+    status: DocLinkStatus,
+  },
+  implements: [SystemNode],
+});
+const DocLinkConnection = defineObject("DocLinkConnection", {
+  fields: {
+    items: z.array(DocLink),
+    nextToken: Scalars.String.optional(),
+  },
+});
+const Project = defineObject("Project", {
+  fields: {
+    id: Scalars.ID,
+    entityType: EntityType,
+    tenantId: Scalars.ID,
+    ownerId: Scalars.ID,
+    createdAt: Scalars.DateTime,
+    updatedAt: Scalars.DateTime,
+    deletedAt: Scalars.DateTime.optional(),
+    ttl: Scalars.Int.optional(),
+    forkedFromId: Scalars.ID.optional(),
+    forkedFromVersion: Scalars.String.optional(),
+    permissions: ResourcePermissions,
+    sharedWith: z.array(Scalars.String.optional()).optional(),
+    name: Scalars.String,
+    description: Scalars.String.optional(),
+    status: ProjectStatus,
+    docLinks: DocLinkConnection.optional(),
+  },
+  implements: [SystemNode, Shareable, Paginate],
+});
+
+const ProjectEdge = defineObject("ProjectEdge", {
+  fields: {
+    cursor: Scalars.String,
+    node: Project,
+  },
+});
+
+const ProjectConnection = defineObject("ProjectConnection", {
+  fields: {
+    edges: z.array(ProjectEdge),
+    pageInfo: PageInfo,
+  },
+});
+
+const ProjectPayload = defineObject("ProjectPayload", {
+  fields: {
+    project: Project.optional(),
+    userErrors: z.array(UserError),
+  },
+});
+
+const DocLinkPayload = defineObject("DocLinkPayload", {
+  fields: {
+    docLink: DocLink.optional(),
+    userErrors: z.array(UserError),
+  },
+});
+const BatchFailure = defineObject("BatchFailure", {
+  fields: {
+    filename: Scalars.String.optional(),
+    error: Scalars.String.optional(),
+  },
+});
+const DocLinkBatchPayload = defineObject("DocLinkBatchPayload", {
+  fields: {
+    successful: z.array(DocLink),
+    failed: z.array(BatchFailure),
+    userErrors: z.array(UserError),
+  },
+});
+
+const Workflow = defineObject("Workflow", {
+  fields: {
+    id: Scalars.ID,
+    entityType: EntityType,
+    tenantId: Scalars.ID,
+    ownerId: Scalars.ID,
+    createdAt: Scalars.DateTime,
+    updatedAt: Scalars.DateTime,
+    deletedAt: Scalars.DateTime.optional(),
+    ttl: Scalars.Int.optional(),
+    forkedFromId: Scalars.ID.optional(),
+    forkedFromVersion: Scalars.String.optional(),
+    permissions: ResourcePermissions,
+    sharedWith: z.array(Scalars.String.optional()).optional(),
+    subscriptionId: Scalars.ID.optional(),
+    isLocked: Scalars.Boolean,
+    name: Scalars.String,
+    definitionYaml: Scalars.String,
+  },
+  implements: [SystemNode, Shareable, LicensedItem, Paginate],
+});
+
+const WorkflowEdge = defineObject("WorkflowEdge", {
+  fields: {
+    cursor: Scalars.String,
+    node: Workflow,
+  },
+});
+
+const WorkflowConnection = defineObject("WorkflowConnection", {
+  fields: {
+    edges: z.array(WorkflowEdge),
+    pageInfo: PageInfo,
+  },
+});
+
+const WorkflowPayload = defineObject("WorkflowPayload", {
+  fields: {
+    workflow: Workflow.optional(),
+    userErrors: z.array(UserError),
+  },
+});
+
+const Dashboard = defineObject("Dashboard", {
+  fields: {
+    id: Scalars.ID,
+    entityType: EntityType,
+    tenantId: Scalars.ID,
+    ownerId: Scalars.ID,
+    createdAt: Scalars.DateTime,
+    updatedAt: Scalars.DateTime,
+    deletedAt: Scalars.DateTime.optional(),
+    ttl: Scalars.Int.optional(),
+    forkedFromId: Scalars.ID.optional(),
+    forkedFromVersion: Scalars.String.optional(),
+    permissions: ResourcePermissions,
+    sharedWith: z.array(Scalars.String.optional()).optional(),
+    subscriptionId: Scalars.ID.optional(),
+    isLocked: Scalars.Boolean,
+    title: Scalars.String,
+    layoutConfig: Scalars.JSON,
+  },
+  implements: [SystemNode, Shareable, LicensedItem, Paginate],
+});
+
+const DashboardEdge = defineObject("DashboardEdge", {
+  fields: {
+    cursor: Scalars.String,
+    node: Dashboard,
+  },
+});
+
+const DashboardConnection = defineObject("DashboardConnection", {
+  fields: {
+    edges: z.array(DashboardEdge),
+    pageInfo: PageInfo,
+  },
+});
+
+const DashboardPayload = defineObject("DashboardPayload", {
+  fields: {
+    dashboard: Dashboard.optional(),
+    userErrors: z.array(UserError),
+  },
+});
+
+const ProductListing = defineObject("ProductListing", {
+  fields: {
+    id: Scalars.ID,
+    entityType: EntityType,
+    tenantId: Scalars.ID,
+    ownerId: Scalars.ID,
+    createdAt: Scalars.DateTime,
+    updatedAt: Scalars.DateTime,
+    deletedAt: Scalars.DateTime.optional(),
+    ttl: Scalars.Int.optional(),
+    forkedFromId: Scalars.ID.optional(),
+    forkedFromVersion: Scalars.String.optional(),
+    permissions: ResourcePermissions,
+    title: Scalars.String,
+    description: Scalars.String.optional(),
+    priceMonthly: Scalars.Float.optional(),
+    latestVersionId: Scalars.ID,
+  },
+  implements: [SystemNode],
+});
+const PackageAsset = defineObject("PackageAsset", {
+  fields: {
+    originalAssetId: Scalars.ID,
+    type: EntityType,
+    name: Scalars.String,
+    snapshotData: Scalars.JSON,
+  },
+});
+const ProductVersion = defineObject("ProductVersion", {
+  fields: {
+    id: Scalars.ID,
+    entityType: EntityType,
+    tenantId: Scalars.ID,
+    ownerId: Scalars.ID,
+    createdAt: Scalars.DateTime,
+    updatedAt: Scalars.DateTime,
+    deletedAt: Scalars.DateTime.optional(),
+    ttl: Scalars.Int.optional(),
+    forkedFromId: Scalars.ID.optional(),
+    forkedFromVersion: Scalars.String.optional(),
+    permissions: ResourcePermissions,
+    productId: Scalars.ID,
+    versionString: Scalars.String,
+    assets: z.array(PackageAsset),
+  },
+  implements: [SystemNode],
+});
+
+const LicenseSubscription = defineObject("LicenseSubscription", {
+  fields: {
+    id: Scalars.ID,
+    entityType: EntityType,
+    tenantId: Scalars.ID,
+    ownerId: Scalars.ID,
+    createdAt: Scalars.DateTime,
+    updatedAt: Scalars.DateTime,
+    deletedAt: Scalars.DateTime.optional(),
+    ttl: Scalars.Int.optional(),
+    forkedFromId: Scalars.ID.optional(),
+    forkedFromVersion: Scalars.String.optional(),
+    permissions: ResourcePermissions,
+    listingId: Scalars.ID,
+    installedVersionId: Scalars.ID,
+    status: SubscriptionStatus,
+    validUntil: Scalars.DateTime,
+    stripeSubscriptionId: Scalars.String.optional(),
+    stripeCustomerId: Scalars.String.optional(),
+  },
+  implements: [SystemNode],
+});
+
+const ProductListingConnection = defineObject("ProductListingConnection", {
+  fields: {
+    items: z.array(ProductListing),
+    nextToken: Scalars.String.optional(),
+  },
+});
+
+const ProductListingPayload = defineObject("ProductListingPayload", {
+  fields: {
+    productListing: ProductListing.optional(),
+    userErrors: z.array(UserError),
+  },
+});
+
+const LicensePayload = defineObject("LicensePayload", {
+  fields: {
+    license: LicenseSubscription.optional(),
+    userErrors: z.array(UserError),
+  },
+});
+
+const UserPresence = defineObject("UserPresence", {
+  fields: {
+    projectId: Scalars.ID,
+    userId: Scalars.ID,
+    username: Scalars.String.optional(),
+    action: PresenceAction,
+    cursorX: Scalars.Float.optional(),
+    cursorY: Scalars.Float.optional(),
+    timestamp: Scalars.DateTime,
+  },
+});
+
+const ForkEntityPayload = defineObject("ForkEntityPayload", {
+  fields: {
+    node: SystemNode.optional(),
+    userErrors: z.array(UserError),
+  },
+});
+
+const generator = new GraphQLSchemaGenerator("UserError", {
+  schema: UserError,
+
+  inputs: {
+    primarykeyinput: PrimaryKeyInput,
+    parentkeyinput: ParentKeyInput,
+    compositekeyinput: CompositeKeyInput,
+    paginateinput: PaginateInput,
+    forkentityinput: ForkEntityInput,
+    projectsortinput: ProjectSortInput,
+    projectfilterinput: ProjectFilterInput,
+    createprojectinput: CreateProjectInput,
+    updateprojectinput: UpdateProjectInput,
+    createdoclinkinput: CreateDocLinkInput,
+    updatedoclinkinput: UpdateDocLinkInput,
+    workflowsortinput: WorkflowSortInput,
+    workflowfilterinput: WorkflowFilterInput,
+    createworkflowinput: CreateWorkflowInput,
+    updateworkflowinput: UpdateWorkflowInput,
+    dashboardsortinput: DashboardSortInput,
+    createdashboardinput: CreateDashboardInput,
+    updatedashboardinput: UpdateDashboardInput,
+  },
+
+  queries: {
+    getProject: field(
+      {
+        key: PrimaryKeyInput,
+      },
+      Project.nullable()
+    ),
+    projects: field(
+      {
+        scope: ListScope.optional(),
+        filter: ProjectFilterInput.optional(),
+        sort: ProjectSortInput.optional(),
+        paginate: PaginateInput.optional(),
+      },
+      ProjectConnection
+    ),
+    getDocLink: field(
+      {
+        key: CompositeKeyInput,
+      },
+      DocLink.nullable()
+    ),
+    listDocLinks: field(
+      {
+        key: ParentKeyInput,
+        limit: Scalars.Int.optional(),
+        nextToken: Scalars.String.optional(),
+      },
+      DocLinkConnection.nullable()
+    ),
+    getWorkflow: field(
+      {
+        key: PrimaryKeyInput,
+      },
+      Workflow.nullable()
+    ),
+    workflows: field(
+      {
+        scope: ListScope.optional(),
+        filter: WorkflowFilterInput.optional(),
+        sort: WorkflowSortInput.optional(),
+        paginate: PaginateInput.optional(),
+      },
+      WorkflowConnection
+    ),
+    getDashboard: field(
+      {
+        key: PrimaryKeyInput,
+      },
+      Dashboard.nullable()
+    ),
+    dashboards: field(
+      {
+        scope: ListScope.optional(),
+        sort: DashboardSortInput.optional(),
+        paginate: PaginateInput.optional(),
+      },
+      DashboardConnection
+    ),
+    getProductListing: field(
+      {
+        key: PrimaryKeyInput,
+      },
+      ProductListing.nullable()
+    ),
+    listProductListings: field(
+      {
+        limit: Scalars.Int.optional(),
+        nextToken: Scalars.String.optional(),
+      },
+      ProductListingConnection.nullable()
+    ),
+  },
+
+  mutations: {
+    createProject: field(
+      {
+        input: CreateProjectInput,
+      },
+      ProjectPayload.nullable()
+    ),
+    updateProject: field(
+      {
+        key: PrimaryKeyInput,
+        input: UpdateProjectInput,
+      },
+      ProjectPayload.nullable()
+    ),
+    deleteProject: field(
+      {
+        key: PrimaryKeyInput,
+      },
+      ProjectPayload.nullable()
+    ),
+    restoreProject: field(
+      {
+        key: PrimaryKeyInput,
+      },
+      ProjectPayload.nullable()
+    ),
+    createDocLink: field(
+      {
+        parentKey: ParentKeyInput,
+        input: CreateDocLinkInput,
+      },
+      DocLinkPayload.nullable()
+    ),
+    batchCreateDocLinks: field(
+      {
+        parentKey: ParentKeyInput,
+        inputs: z.array(CreateDocLinkInput),
+      },
+      DocLinkBatchPayload.nullable()
+    ),
+    updateDocLink: field(
+      {
+        key: CompositeKeyInput,
+        input: UpdateDocLinkInput,
+      },
+      DocLinkPayload.nullable()
+    ),
+    deleteDocLink: field(
+      {
+        key: CompositeKeyInput,
+      },
+      DocLinkPayload.nullable()
+    ),
+    createWorkflow: field(
+      {
+        input: CreateWorkflowInput,
+      },
+      WorkflowPayload.nullable()
+    ),
+    updateWorkflow: field(
+      {
+        key: PrimaryKeyInput,
+        input: UpdateWorkflowInput,
+      },
+      WorkflowPayload.nullable()
+    ),
+    deleteWorkflow: field(
+      {
+        key: PrimaryKeyInput,
+      },
+      WorkflowPayload.nullable()
+    ),
+    createDashboard: field(
+      {
+        input: CreateDashboardInput,
+      },
+      DashboardPayload.nullable()
+    ),
+    updateDashboard: field(
+      {
+        key: PrimaryKeyInput,
+        input: UpdateDashboardInput,
+      },
+      DashboardPayload.nullable()
+    ),
+    deleteDashboard: field(
+      {
+        key: PrimaryKeyInput,
+      },
+      DashboardPayload.nullable()
+    ),
+    forkEntity: field(
+      {
+        input: ForkEntityInput,
+      },
+      ForkEntityPayload.nullable()
+    ),
+    createProductListing: field(
+      {
+        title: Scalars.String,
+        priceMonthly: Scalars.Float.optional(),
+        includedItemIds: z.array(Scalars.ID),
+      },
+      ProductListingPayload.nullable()
+    ),
+    grantSubscription: field(
+      {
+        targetUserId: Scalars.ID,
+        listingId: Scalars.ID,
+        durationDays: Scalars.Int,
+      },
+      LicensePayload.nullable()
+    ),
+    broadcastPresence: field(
+      {
+        projectId: Scalars.ID,
+        action: PresenceAction,
+        cursorX: Scalars.Float.optional(),
+        cursorY: Scalars.Float.optional(),
+      },
+      UserPresence.nullable()
+    ),
+  },
+
+  subscriptions: {
+    onCreateProject: field(
+      {
+        ownerId: Scalars.ID.optional(),
+        tenantId: Scalars.ID.optional(),
+      },
+      ProjectPayload.nullable()
+    ),
+    onUpdateProject: field(
+      {
+        id: Scalars.ID,
+      },
+      ProjectPayload.nullable()
+    ),
+    onDeleteProject: field(
+      {
+        id: Scalars.ID,
+      },
+      ProjectPayload.nullable()
+    ),
+    onCreateDocLink: field(
+      {
+        parentId: Scalars.ID,
+      },
+      DocLinkPayload.nullable()
+    ),
+    onUpdateDocLink: field(
+      {
+        parentId: Scalars.ID,
+      },
+      DocLinkPayload.nullable()
+    ),
+    onDeleteDocLink: field(
+      {
+        parentId: Scalars.ID,
+      },
+      DocLinkPayload.nullable()
+    ),
+    onCreateWorkflow: field(
+      {
+        ownerId: Scalars.ID.optional(),
+        tenantId: Scalars.ID.optional(),
+      },
+      WorkflowPayload.nullable()
+    ),
+    onUpdateWorkflow: field(
+      {
+        id: Scalars.ID,
+      },
+      WorkflowPayload.nullable()
+    ),
+    onDeleteWorkflow: field(
+      {
+        id: Scalars.ID,
+      },
+      WorkflowPayload.nullable()
+    ),
+    onCreateDashboard: field(
+      {
+        ownerId: Scalars.ID.optional(),
+        tenantId: Scalars.ID.optional(),
+      },
+      DashboardPayload.nullable()
+    ),
+    onUpdateDashboard: field(
+      {
+        id: Scalars.ID,
+      },
+      DashboardPayload.nullable()
+    ),
+    onDeleteDashboard: field(
+      {
+        id: Scalars.ID,
+      },
+      DashboardPayload.nullable()
+    ),
+    onCreateProductListing: field(
+      {
+        ownerId: Scalars.ID,
+      },
+      ProductListingPayload.nullable()
+    ),
+    onGrantSubscription: field(
+      {
+        targetUserId: Scalars.ID,
+      },
+      LicensePayload.nullable()
+    ),
+    onPresenceChange: field(
+      {
+        projectId: Scalars.ID,
+      },
+      UserPresence.nullable()
+    ),
+  },
+});
+
+const schema = generator.generateSchemaFile();
+export { generator };
+export default schema;

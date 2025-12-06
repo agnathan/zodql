@@ -1,0 +1,10 @@
+{
+  "plugins": [
+    {
+      "name": "c:\\Users\\danie\\projects\\StratiqAI\\zodql\\src\\plugins\\examples\\GraphQLOperationsPlugin.ts"
+    }
+  ],
+  "workingDir": "./generated",
+  "continueOnError": true,
+  "parallel": false
+}

@@ -9,7 +9,12 @@ const __dirname = dirname(__filename);
 const isProduction = process.env.NODE_ENV === 'production';
 
 const baseConfig = {
-  entryPoints: ['src/index.ts'],
+  entryPoints: [
+    'src/index.ts',
+    'src/cli/zodql-cli.ts',
+    'src/cli/plugin-cli.ts',
+    'src/cli/graphql-to-zodql.ts',
+  ],
   bundle: true,
   outdir: 'dist',
   platform: 'node',

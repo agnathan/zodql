@@ -10,6 +10,7 @@ import {
   captureTestError,
   finalizeTest,
   writeTestSummaries,
+  setDescribeBlock,
 } from '../src/test-reporter.js';
 
 // Store current test context
@@ -98,6 +99,20 @@ describe('GraphQLOperationsPlugin', () => {
     }
     // Capture test name from context
     currentTestName = ctx.task?.name;
+    // Capture describe block name from suite hierarchy
+    let suite = ctx.task?.suite;
+    // Traverse up the suite tree to find the immediate describe block
+    // (skip the root suite and find the first named suite)
+    while (suite) {
+      if (suite.name && suite.name !== '') {
+        setDescribeBlock(suite.name);
+        break;
+      }
+      suite = (suite as any).parent;
+    }
+    if (!suite) {
+      setDescribeBlock('Uncategorized');
+    }
   });
 
   afterEach(() => {

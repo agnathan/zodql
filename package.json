@@ -17,7 +17,7 @@
     "LICENSE"
   ],
   "bin": {
-    "zodql": "./dist/cli/plugin-cli.js"
+    "zodql": "./dist/cli/zodql-cli.js"
   },
   "scripts": {
     "clean": "rimraf dist",
@@ -35,7 +35,10 @@
     "test:show": "tsx scripts/test-debug.ts",
     "validate": "tsx scripts/validate-schema.ts",
     "lint:schema": "tsx scripts/lint-schema.ts",
-    "plugin": "tsx src/cli/plugin-cli.ts"
+    "plugin": "tsx src/cli/plugin-cli.ts",
+    "convert": "tsx src/cli/graphql-to-zodql.ts",
+    "generate:operations": "tsx scripts/generate-operations.ts",
+    "generate:operations": "tsx scripts/generate-operations.ts"
   },
   "keywords": [
     "graphql",

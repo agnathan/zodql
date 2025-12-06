@@ -1,0 +1,714 @@
+schema {
+  query: Query
+  mutation: Mutation
+  subscription: Subscription
+}
+
+# ----------------------------------------------------------------------
+# 1. SCALARS & ENUMS
+# ----------------------------------------------------------------------
+
+scalar AWSDateTime
+scalar AWSJSON
+
+enum EntityType {
+  PROJECT
+  DOCLINK
+  WORKFLOW
+  DASHBOARD
+  DATASOURCE
+  PRODUCT_LISTING
+  PRODUCT_VERSION
+  SUBSCRIPTION
+}
+
+enum PermissionScope {
+  PRIVATE
+  TENANT
+  SYSTEM
+}
+
+enum ListScope {
+  OWNED_BY_ME
+  SHARED_WITH_ME
+  ALL_TENANT # Admin view
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ARCHIVED
+  DELETED
+}
+
+enum DocLinkStatus {
+  notUploaded
+  uploaded
+  processing
+  ready
+  failed
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
+enum PresenceAction {
+  VIEWING
+  TYPING
+  EDITING
+  IDLE
+}
+
+enum SortDirection {
+  ASC
+  DESC
+}
+
+enum ProjectSortField {
+  UPDATED_AT
+  NAME
+}
+
+# ----------------------------------------------------------------------
+# 2. COMMON OBJECTS (Best Practices)
+# ----------------------------------------------------------------------
+
+"""
+Standardized Error handling for UI.
+Returns the error code and the specific field that failed validation.
+"""
+type UserError {
+  message: String!
+  code: String! 
+  field: [String] 
+}
+
+"""
+Computed Permissions for UI Logic (RBAC Hints).
+Populated by the Resolver based on User Identity vs Resource Owner.
+"""
+type ResourcePermissions {
+  canEdit: Boolean!
+  canDelete: Boolean!
+  canShare: Boolean!
+}
+
+"""
+Standard Relay-Style Pagination Information.
+"""
+type PageInfo {
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  startCursor: String
+  endCursor: String
+}
+
+# ----------------------------------------------------------------------
+# 3. INTERFACES (The Contracts)
+# ----------------------------------------------------------------------
+
+"""
+The Standard Node. Every item in the DB has these fields.
+"""
+interface SystemNode {
+  id: ID!
+  entityType: EntityType!
+  tenantId: ID!
+  ownerId: ID!
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+  
+  # Lifecycle / Copy-on-Write
+  deletedAt: AWSDateTime 
+  ttl: Int 
+  forkedFromId: ID 
+  forkedFromVersion: String
+
+  # Security / UX
+  permissions: ResourcePermissions!
+}
+
+"""
+Items that support Cursor Pagination.
+"""
+interface Paginate {
+  id: ID!
+  updatedAt: AWSDateTime!
+}
+
+"""
+Items that can be shared via ACLs.
+"""
+interface Shareable {
+  sharedWith: [String]
+}
+
+"""
+Items controlled by Marketplace Licenses.
+"""
+interface LicensedItem {
+  subscriptionId: ID
+  isLocked: Boolean!
+}
+
+# ----------------------------------------------------------------------
+# 4. SAFETY INPUTS (The Gold Standard)
+# ----------------------------------------------------------------------
+
+"""
+For looking up Root Entities (Global ID).
+"""
+input PrimaryKeyInput {
+  id: ID!
+}
+
+"""
+For operations requiring Parent Context (Context-Aware).
+"""
+input ParentKeyInput {
+  parentId: ID!
+}
+
+"""
+For looking up Child Entities (Prevents IDOR).
+"""
+input CompositeKeyInput {
+  id: ID!
+  parentId: ID!
+}
+
+"""
+Standardized Input for Relay-Style Cursor Pagination.
+"""
+input PaginateInput {
+  first: Int
+  after: String
+  last: Int
+  before: String
+}
+
+"""
+Input for Copy-on-Write / Forking Logic.
+"""
+input ForkEntityInput {
+  sourceKey: PrimaryKeyInput!
+  targetScope: PermissionScope!
+  name: String
+  description: String
+}
+
+# ----------------------------------------------------------------------
+# 5. ENTITY: PROJECT (Root)
+# ----------------------------------------------------------------------
+
+type Project implements SystemNode & Shareable & Paginate
+  @aws_iam @aws_cognito_user_pools(cognito_groups: ["SystemAdmins", "TenantAdmins", "Users"]) {
+  
+  id: ID!
+  entityType: EntityType!
+  tenantId: ID!
+  ownerId: ID!
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+  deletedAt: AWSDateTime
+  ttl: Int
+  forkedFromId: ID 
+  forkedFromVersion: String
+  permissions: ResourcePermissions!
+
+  sharedWith: [String]
+  name: String!
+  description: String
+  status: ProjectStatus!
+  
+  # Adjacency List for children (Simple pagination)
+  docLinks(limit: Int, nextToken: String): DocLinkConnection
+}
+
+type ProjectEdge {
+  cursor: String!
+  node: Project!
+}
+
+type ProjectConnection {
+  edges: [ProjectEdge!]!
+  pageInfo: PageInfo!
+}
+
+type ProjectPayload {
+  project: Project
+  userErrors: [UserError!]!
+}
+
+input ProjectSortInput {
+  field: ProjectSortField = UPDATED_AT
+  direction: SortDirection = DESC
+}
+
+input ProjectFilterInput {
+  status: ProjectStatus
+  nameContains: String
+}
+
+input CreateProjectInput {
+  name: String!
+  description: String
+  status: ProjectStatus = ACTIVE
+  sharingMode: PermissionScope = PRIVATE
+}
+
+input UpdateProjectInput {
+  name: String
+  description: String
+  status: ProjectStatus
+  sharedWith: [String]
+}
+
+# ----------------------------------------------------------------------
+# 6. ENTITY: DOCLINK (Child)
+# ----------------------------------------------------------------------
+
+type DocLink implements SystemNode 
+  @aws_iam @aws_cognito_user_pools(cognito_groups: ["SystemAdmins", "TenantAdmins", "Users"]) {
+  
+  id: ID!
+  entityType: EntityType!
+  tenantId: ID!
+  ownerId: ID!
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+  deletedAt: AWSDateTime
+  ttl: Int
+  forkedFromId: ID 
+  forkedFromVersion: String
+  permissions: ResourcePermissions!
+
+  parentId: ID!       
+  documentId: ID! # CAS Hash
+  filename: String!
+  status: DocLinkStatus!
+}
+
+type DocLinkConnection { 
+  items: [DocLink!]! 
+  nextToken: String 
+}
+
+type DocLinkPayload { 
+  docLink: DocLink
+  userErrors: [UserError!]! 
+}
+
+type DocLinkBatchPayload { 
+  successful: [DocLink!]!
+  failed: [BatchFailure!]!
+  userErrors: [UserError!]! 
+}
+
+type BatchFailure { 
+  filename: String
+  error: String 
+}
+
+input CreateDocLinkInput {
+  documentId: ID! 
+  filename: String!
+  status: DocLinkStatus = notUploaded
+}
+
+input UpdateDocLinkInput {
+  filename: String
+  status: DocLinkStatus
+}
+
+# ----------------------------------------------------------------------
+# 7. ENTITY: WORKFLOW & DASHBOARD (Functional Assets)
+# ----------------------------------------------------------------------
+
+type Workflow implements SystemNode & Shareable & LicensedItem & Paginate
+  @aws_iam @aws_cognito_user_pools(cognito_groups: ["SystemAdmins", "TenantAdmins", "Users"]) {
+  
+  id: ID!
+  entityType: EntityType!
+  tenantId: ID!
+  ownerId: ID!
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+  deletedAt: AWSDateTime
+  ttl: Int
+  forkedFromId: ID 
+  forkedFromVersion: String
+  permissions: ResourcePermissions!
+  sharedWith: [String]
+  subscriptionId: ID
+  isLocked: Boolean! 
+
+  name: String!
+  definitionYaml: String!
+}
+
+type WorkflowEdge { cursor: String! node: Workflow! }
+type WorkflowConnection { edges: [WorkflowEdge!]! pageInfo: PageInfo! }
+type WorkflowPayload { workflow: Workflow, userErrors: [UserError!]! }
+
+input WorkflowSortInput {
+  field: ProjectSortField = UPDATED_AT
+  direction: SortDirection = DESC
+}
+
+input WorkflowFilterInput {
+  nameContains: String
+}
+
+input CreateWorkflowInput { name: String!, definitionYaml: String! }
+input UpdateWorkflowInput { name: String, definitionYaml: String }
+
+# --- Dashboard ---
+
+type Dashboard implements SystemNode & Shareable & LicensedItem & Paginate
+  @aws_iam @aws_cognito_user_pools(cognito_groups: ["SystemAdmins", "TenantAdmins", "Users"]) {
+  
+  id: ID!
+  entityType: EntityType!
+  tenantId: ID!
+  ownerId: ID!
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+  deletedAt: AWSDateTime
+  ttl: Int
+  forkedFromId: ID 
+  forkedFromVersion: String
+  permissions: ResourcePermissions!
+  sharedWith: [String]
+  subscriptionId: ID
+  isLocked: Boolean! 
+
+  title: String!
+  layoutConfig: AWSJSON! 
+}
+
+type DashboardEdge { cursor: String! node: Dashboard! }
+type DashboardConnection { edges: [DashboardEdge!]! pageInfo: PageInfo! }
+type DashboardPayload { dashboard: Dashboard, userErrors: [UserError!]! }
+
+input DashboardSortInput {
+  field: ProjectSortField = UPDATED_AT
+  direction: SortDirection = DESC
+}
+
+input CreateDashboardInput { title: String!, layoutConfig: AWSJSON! }
+input UpdateDashboardInput { title: String, layoutConfig: AWSJSON }
+
+# ----------------------------------------------------------------------
+# 8. MARKETPLACE & BILLING
+# ----------------------------------------------------------------------
+
+type ProductListing implements SystemNode 
+  @aws_iam @aws_cognito_user_pools(cognito_groups: ["SystemAdmins", "MarketplaceSellers", "Users"]) {
+  
+  id: ID!
+  entityType: EntityType!
+  tenantId: ID!
+  ownerId: ID!
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+  deletedAt: AWSDateTime
+  ttl: Int
+  forkedFromId: ID 
+  forkedFromVersion: String
+  permissions: ResourcePermissions!
+
+  title: String!
+  description: String
+  priceMonthly: Float
+  latestVersionId: ID! 
+}
+
+type ProductVersion implements SystemNode 
+  @aws_iam @aws_cognito_user_pools(cognito_groups: ["SystemAdmins", "MarketplaceSellers", "Users"]) {
+  
+  id: ID!
+  entityType: EntityType!
+  tenantId: ID!
+  ownerId: ID!
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+  deletedAt: AWSDateTime
+  ttl: Int
+  forkedFromId: ID 
+  forkedFromVersion: String
+  permissions: ResourcePermissions!
+
+  productId: ID!
+  versionString: String!
+  assets: [PackageAsset!]!
+}
+
+type PackageAsset {
+  originalAssetId: ID!
+  type: EntityType!
+  name: String!
+  snapshotData: AWSJSON! 
+}
+
+type LicenseSubscription implements SystemNode 
+  @aws_iam @aws_cognito_user_pools(cognito_groups: ["SystemAdmins", "TenantAdmins", "Users"]) {
+  
+  id: ID!
+  entityType: EntityType!
+  tenantId: ID!
+  ownerId: ID!
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+  deletedAt: AWSDateTime
+  ttl: Int
+  forkedFromId: ID 
+  forkedFromVersion: String
+  permissions: ResourcePermissions!
+
+  listingId: ID!
+  installedVersionId: ID!
+  status: SubscriptionStatus!
+  validUntil: AWSDateTime!
+  stripeSubscriptionId: String 
+  stripeCustomerId: String
+}
+
+type ProductListingConnection { items: [ProductListing!]! nextToken: String }
+type ProductListingPayload { productListing: ProductListing, userErrors: [UserError!]! }
+type LicensePayload { license: LicenseSubscription, userErrors: [UserError!]! }
+
+# ----------------------------------------------------------------------
+# 9. REAL-TIME PRESENCE
+# ----------------------------------------------------------------------
+
+type UserPresence {
+  projectId: ID!
+  userId: ID!
+  username: String
+  action: PresenceAction!
+  cursorX: Float
+  cursorY: Float
+  timestamp: AWSDateTime!
+}
+
+# ----------------------------------------------------------------------
+# 10. QUERY ROOT
+# ----------------------------------------------------------------------
+
+type Query {
+  # --- Projects ---
+  getProject(key: PrimaryKeyInput!): Project
+  
+  projects(
+    scope: ListScope = OWNED_BY_ME
+    filter: ProjectFilterInput
+    sort: ProjectSortInput
+    paginate: PaginateInput
+  ): ProjectConnection!
+
+  # --- DocLinks ---
+  getDocLink(key: CompositeKeyInput!): DocLink
+  
+  listDocLinks(
+    key: ParentKeyInput! 
+    limit: Int
+    nextToken: String
+  ): DocLinkConnection
+
+  # --- Workflows ---
+  getWorkflow(key: PrimaryKeyInput!): Workflow
+  
+  workflows(
+    scope: ListScope = OWNED_BY_ME
+    filter: WorkflowFilterInput
+    sort: WorkflowSortInput
+    paginate: PaginateInput
+  ): WorkflowConnection!
+  
+  # --- Dashboards ---
+  getDashboard(key: PrimaryKeyInput!): Dashboard
+  
+  dashboards(
+    scope: ListScope = OWNED_BY_ME
+    sort: DashboardSortInput
+    paginate: PaginateInput
+  ): DashboardConnection!
+
+  # --- Marketplace ---
+  getProductListing(key: PrimaryKeyInput!): ProductListing
+  listProductListings(limit: Int, nextToken: String): ProductListingConnection
+}
+
+# ----------------------------------------------------------------------
+# 11. MUTATION ROOT
+# ----------------------------------------------------------------------
+
+type ForkEntityPayload {
+  node: SystemNode
+  userErrors: [UserError!]!
+}
+
+type Mutation {
+  # --- Projects ---
+  createProject(input: CreateProjectInput!): ProjectPayload
+  updateProject(key: PrimaryKeyInput!, input: UpdateProjectInput!): ProjectPayload
+  deleteProject(key: PrimaryKeyInput!): ProjectPayload
+  restoreProject(key: PrimaryKeyInput!): ProjectPayload
+
+  # --- DocLinks ---
+  createDocLink(
+    parentKey: ParentKeyInput!
+    input: CreateDocLinkInput!
+  ): DocLinkPayload
+
+  # Bulk Upload Optimization
+  batchCreateDocLinks(
+    parentKey: ParentKeyInput!
+    inputs: [CreateDocLinkInput!]!
+  ): DocLinkBatchPayload
+
+  updateDocLink(key: CompositeKeyInput!, input: UpdateDocLinkInput!): DocLinkPayload
+  deleteDocLink(key: CompositeKeyInput!): DocLinkPayload
+
+  # --- Functional Assets ---
+  createWorkflow(input: CreateWorkflowInput!): WorkflowPayload
+  updateWorkflow(key: PrimaryKeyInput!, input: UpdateWorkflowInput!): WorkflowPayload
+  deleteWorkflow(key: PrimaryKeyInput!): WorkflowPayload
+  
+  createDashboard(input: CreateDashboardInput!): DashboardPayload
+  updateDashboard(key: PrimaryKeyInput!, input: UpdateDashboardInput!): DashboardPayload
+  deleteDashboard(key: PrimaryKeyInput!): DashboardPayload
+
+  # --- COPY-ON-WRITE STRATEGY ---
+  # Handles System->User, Tenant->User, and System->Tenant cloning
+  forkEntity(input: ForkEntityInput!): ForkEntityPayload
+
+  # --- MARKETPLACE OPS ---
+  createProductListing(
+    title: String!
+    priceMonthly: Float
+    includedItemIds: [ID!]!
+  ): ProductListingPayload
+    @aws_auth(cognito_groups: ["SystemAdmins", "MarketplaceSellers"])
+
+  grantSubscription(
+    targetUserId: ID!
+    listingId: ID!
+    durationDays: Int!
+  ): LicensePayload
+    @aws_auth(cognito_groups: ["SystemAdmins"])
+    
+  # --- PRESENCE ---
+  broadcastPresence(
+    projectId: ID!
+    action: PresenceAction!
+    cursorX: Float
+    cursorY: Float
+  ): UserPresence
+}
+
+# ----------------------------------------------------------------------
+# 12. SUBSCRIPTION ROOT
+# ----------------------------------------------------------------------
+
+type Subscription {
+  # --------------------------------------------------------------------
+  # PROJECT SUBSCRIPTIONS
+  # --------------------------------------------------------------------
+  
+  """
+  Triggered when a Project is created.
+  Client subscribes to a specific Owner (User) or Tenant (Team).
+  """
+  onCreateProject(ownerId: ID, tenantId: ID): ProjectPayload
+    @aws_subscribe(mutations: ["createProject"])
+
+  """
+  Triggered when a Project is updated or Restored from trash.
+  """
+  onUpdateProject(id: ID!): ProjectPayload
+    @aws_subscribe(mutations: ["updateProject", "restoreProject"])
+
+  """
+  Triggered when a Project is soft-deleted.
+  """
+  onDeleteProject(id: ID!): ProjectPayload
+    @aws_subscribe(mutations: ["deleteProject"])
+
+  # --------------------------------------------------------------------
+  # DOCLINK SUBSCRIPTIONS (Child Items)
+  # --------------------------------------------------------------------
+
+  """
+  Triggered when a new file is attached.
+  NOTE: 'batchCreateDocLinks' events are published manually by the backend
+  resolver, not via this directive, due to List vs Single return types.
+  """
+  onCreateDocLink(parentId: ID!): DocLinkPayload
+    @aws_subscribe(mutations: ["createDocLink"])
+
+  onUpdateDocLink(parentId: ID!): DocLinkPayload
+    @aws_subscribe(mutations: ["updateDocLink"])
+
+  onDeleteDocLink(parentId: ID!): DocLinkPayload
+    @aws_subscribe(mutations: ["deleteDocLink"])
+
+  # --------------------------------------------------------------------
+  # WORKFLOW SUBSCRIPTIONS
+  # --------------------------------------------------------------------
+
+  onCreateWorkflow(ownerId: ID, tenantId: ID): WorkflowPayload
+    @aws_subscribe(mutations: ["createWorkflow"])
+
+  onUpdateWorkflow(id: ID!): WorkflowPayload
+    @aws_subscribe(mutations: ["updateWorkflow"])
+
+  onDeleteWorkflow(id: ID!): WorkflowPayload
+    @aws_subscribe(mutations: ["deleteWorkflow"])
+
+  # --------------------------------------------------------------------
+  # DASHBOARD SUBSCRIPTIONS
+  # --------------------------------------------------------------------
+
+  onCreateDashboard(ownerId: ID, tenantId: ID): DashboardPayload
+    @aws_subscribe(mutations: ["createDashboard"])
+
+  onUpdateDashboard(id: ID!): DashboardPayload
+    @aws_subscribe(mutations: ["updateDashboard"])
+
+  onDeleteDashboard(id: ID!): DashboardPayload
+    @aws_subscribe(mutations: ["deleteDashboard"])
+
+  # --------------------------------------------------------------------
+  # MARKETPLACE SUBSCRIPTIONS
+  # --------------------------------------------------------------------
+
+  """
+  Triggered when a new Product is published.
+  Useful for Sellers tracking their inventory.
+  """
+  onCreateProductListing(ownerId: ID!): ProductListingPayload
+    @aws_subscribe(mutations: ["createProductListing"])
+  
+  """
+  Triggered when a User is granted a license (Purchase/Trial).
+  The UI uses this to immediately unlock 'isLocked' features.
+  """
+  onGrantSubscription(targetUserId: ID!): LicensePayload
+    @aws_subscribe(mutations: ["grantSubscription"])
+
+  # --------------------------------------------------------------------
+  # REAL-TIME COLLABORATION
+  # --------------------------------------------------------------------
+
+  """
+  High-frequency ephemeral stream for Cursors and "Who is typing".
+  Events are ephemeral and not persisted to DynamoDB.
+  """
+  onPresenceChange(projectId: ID!): UserPresence
+    @aws_subscribe(mutations: ["broadcastPresence"])
+}
