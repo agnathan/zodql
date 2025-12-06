@@ -1,0 +1,48 @@
+{
+  "name": "zodql",
+  "version": "1.0.0",
+  "description": "A pure Zod-based DSL for defining GraphQL schemas",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node esbuild.config.js",
+    "build:dev": "node esbuild.config.js dev",
+    "build:watch": "node esbuild.config.js watch",
+    "build:types": "tsc --emitDeclarationOnly --noEmit false",
+    "prepublishOnly": "npm run build && npm run build:types",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:watch": "vitest watch",
+    "test:ui": "vitest --ui"
+  },
+  "keywords": [
+    "graphql",
+    "zod",
+    "schema",
+    "typescript"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@vitest/ui": "^1.0.0",
+    "esbuild": "^0.27.1",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  },
+  "dependencies": {
+    "zod": "^3.22.0"
+  }
+}

@@ -1,0 +1,43 @@
+# ZodQL Cursor Rules
+
+## Documentation References
+
+1. **Always reference the documentation files when coding:**
+   - `docs/GRAPHQL_GRAMMAR.md` - Contains the formal GraphQL grammar in EBNF notation and TypeScript ZodQL implementation patterns
+   - `docs/ZODQL_GUIDE.md` - Complete guide for building GraphQL schemas with ZodQL, including examples and best practices
+   
+   When implementing features, generating code, or answering questions about GraphQL/ZodQL, consult these documents first to ensure consistency with the established patterns and grammar mappings.
+
+## GraphQL Grammar Mapping
+
+- Follow the GraphQL grammar nodes defined in `docs/GRAPHQL_GRAMMAR.md`
+- Map GraphQL types to Zod schemas according to the established patterns:
+  - `ScalarTypeDefinition` → `Scalars.X`
+  - `EnumTypeDefinition` → `defineEnum()`
+  - `InputObjectTypeDefinition` → `defineInput()`
+  - `InterfaceTypeDefinition` → `defineInterface()`
+  - `ObjectTypeDefinition` → `defineObject()`
+  - `UnionTypeDefinition` → `defineUnion()`
+  - `FieldDefinition` with arguments → `field()`
+
+## ZodQL Patterns
+
+- Always register custom types using the `register()` function
+- Use `Scalars` for standard GraphQL scalar types (ID, String, Int, Float, Boolean, DateTime, JSON)
+- Use `createResource()` for standardized CRUD operations when appropriate
+- Use `field()` helper for operations with arguments
+- Implement interfaces using the `implements` option in `defineObject()`
+
+## Code Style
+
+- Use TypeScript with strict typing
+- Follow the examples in `docs/ZODQL_GUIDE.md` for consistent patterns
+- Ensure all types are properly registered in the Registry for generator compatibility
+- Use Zod's built-in methods (`.optional()`, `.default()`, `.describe()`, etc.) for field refinements
+
+## Generator Compatibility
+
+- When writing code that generates GraphQL SDL, ensure it reads from the Registry
+- Handle `z.function()` structures created by `field()` helper correctly
+- Support all GraphQL type definitions as documented in the grammar
+
